@@ -73,91 +73,32 @@ export default function ResaleCheckoutPage() {
     }
   }, [resaleId]);
 
-  
-const handleBuy = async () => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const handleBuy = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    alert("Please log in first");
-    window.location.href = "/login";
-    return;
-  }
+    if (!user) {
+      alert("Please log in first");
+      window.location.href = "/login";
+      return;
+    }
 
-  if (!item) return;
+    if (!item) return;
 
-  if (item.ticket.checked_in) {
-    alert("This ticket has already been used");
-    return;
-  }
+    if (item.ticket.checked_in) {
+      alert("This ticket has already been used");
+      return;
+    }
 
-  if (item.resale.seller_id === user.id) {
-    alert("You cannot buy your own ticket");
-    return;
-  }
+    if (item.resale.seller_id === user.id) {
+      alert("You cannot buy your own ticket");
+      return;
+    }
 
-  const resalePrice = Number(item.resale.resale_price || 0);
-
-  // 🔥 YOUR CUT (5%)
-  const platformFee = resalePrice * 0.05;
-
-  // 💰 Seller receives less
-  const sellerPayout = resalePrice - platformFee;
-
-  // 1. Create order (buyer pays full price)
-  const { error: orderError } = await supabase.from("orders").insert([
-    {
-      ticket_type_id: item.ticket.ticket_type_id,
-      buyer_name: user.email || "Resale Buyer",
-      buyer_email: user.email || "",
-      quantity: 1,
-      status: "resale_purchased",
-      base_amount: resalePrice,
-      fixed_fee: 0,
-      percentage_fee: platformFee,
-      buyer_total: resalePrice,
-      organizer_payout: sellerPayout,
-    },
-  ]);
-
-  if (orderError) {
-    alert(orderError.message);
-    return;
-  }
-
-  // 2. Transfer ownership
-  const { error: ticketError } = await supabase
-    .from("tickets")
-    .update({
-      current_owner_id: user.id,
-      is_listed_for_resale: false,
-      resale_price: null,
-    })
-    .eq("id", item.ticket.id);
-
-  if (ticketError) {
-    alert(ticketError.message);
-    return;
-  }
-
-  // 3. Mark resale as sold
-  const { error: resaleError } = await supabase
-    .from("resales")
-    .update({
-      buyer_id: user.id,
-      status: "sold",
-    })
-    .eq("id", item.resale.id);
-
-  if (resaleError) {
-    alert(resaleError.message);
-    return;
-  }
-
-  alert("Ticket purchased successfully 🎉");
-  window.location.href = "/my-tickets";
-};
+    const resalePrice = Number(item.resale.resale_price || 0);
+    const platformFee = resalePrice * 0.05;
+    const sellerPayout = resalePrice - platformFee;
 
     const { error: orderError } = await supabase.from("orders").insert([
       {
@@ -166,11 +107,11 @@ const handleBuy = async () => {
         buyer_email: user.email || "",
         quantity: 1,
         status: "resale_purchased",
-        base_amount: Number(item.resale.resale_price || 0),
+        base_amount: resalePrice,
         fixed_fee: 0,
-        percentage_fee: 0,
-        buyer_total: Number(item.resale.resale_price || 0),
-        organizer_payout: 0,
+        percentage_fee: platformFee,
+        buyer_total: resalePrice,
+        organizer_payout: sellerPayout,
       },
     ]);
 
@@ -206,7 +147,7 @@ const handleBuy = async () => {
       return;
     }
 
-    alert("Resale ticket purchased successfully!");
+    alert("Ticket purchased successfully 🎉");
     window.location.href = "/my-tickets";
   };
 
