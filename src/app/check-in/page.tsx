@@ -13,6 +13,7 @@ export default function CheckInPage() {
   const [qrCode, setQrCode] = useState("");
   const [message, setMessage] = useState("");
   const [scannerRunning, setScannerRunning] = useState(false);
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasScannedRef = useRef(false);
 
@@ -71,6 +72,7 @@ export default function CheckInPage() {
         async (decodedText) => {
           if (hasScannedRef.current) return;
           hasScannedRef.current = true;
+
           setQrCode(decodedText);
           setScannerRunning(false);
 
@@ -81,9 +83,7 @@ export default function CheckInPage() {
 
           await handleCheckIn(decodedText);
         },
-        () => {
-          // ignore scan errors while camera is active
-        }
+        () => {}
       );
 
       setScannerRunning(true);
@@ -109,7 +109,7 @@ export default function CheckInPage() {
     return () => {
       if (scannerRef.current) {
         scannerRef.current.stop().catch(() => {});
-        scannerRef.current.clear().catch(() => {});
+        scannerRef.current.clear(); // ✅ FIXED HERE
       }
     };
   }, []);
@@ -153,7 +153,14 @@ export default function CheckInPage() {
           }}
         />
 
-        <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            marginBottom: 20,
+            flexWrap: "wrap",
+          }}
+        >
           {!scannerRunning ? (
             <button
               onClick={startScanner}
