@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type EventRow = {
@@ -44,6 +44,9 @@ export default function HomePage() {
 
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [isSuggestionVisible, setIsSuggestionVisible] = useState(false);
+
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const loadEvents = async () => {
@@ -102,6 +105,52 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [typingComplete, isSuggestionVisible, isUserTyping]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.setAttribute("muted", "");
+    video.setAttribute("playsinline", "");
+    video.setAttribute("autoplay", "");
+
+    const tryPlay = async () => {
+      try {
+        await video.play();
+      } catch {
+        // Safari may block the first attempt; we'll retry on events below.
+      }
+    };
+
+    const handleCanPlay = () => {
+      tryPlay();
+    };
+
+    const handleLoadedData = () => {
+      setVideoLoaded(true);
+      tryPlay();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        tryPlay();
+      }
+    };
+
+    tryPlay();
+    video.addEventListener("canplay", handleCanPlay);
+    video.addEventListener("loadeddata", handleLoadedData);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      video.removeEventListener("canplay", handleCanPlay);
+      video.removeEventListener("loadeddata", handleLoadedData);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
   const trendingEvents = useMemo(() => events.slice(0, 4), [events]);
 
   return (
@@ -111,6 +160,7 @@ export default function HomePage() {
 
         <div className="absolute inset-0 z-0 overflow-hidden">
           <video
+            ref={videoRef}
             autoPlay
             muted
             loop
@@ -121,7 +171,10 @@ export default function HomePage() {
             controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
             aria-hidden="true"
             tabIndex={-1}
-            className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover scale-105 brightness-95 contrast-115 saturate-150 hue-rotate-[320deg]"
+            poster="/hero-fallback.jpg"
+            className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover scale-105 brightness-95 contrast-115 saturate-150 hue-rotate-[320deg] transition-opacity duration-700 ${
+              videoLoaded ? "opacity-100" : "opacity-0"
+            }`}
           >
             <source src="/hero.mp4" type="video/mp4" />
           </video>
