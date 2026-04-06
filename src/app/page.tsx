@@ -109,23 +109,30 @@ export default function HomePage() {
       <section className="relative min-h-screen w-full overflow-hidden bg-black">
         <div className="absolute inset-0 bg-black" />
 
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          className="absolute inset-0 h-full w-full object-cover scale-105 brightness-95 contrast-115 saturate-150 hue-rotate-[320deg]"
-        >
-          <source src="/hero.mp4" type="video/mp4" />
-        </video>
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            controls={false}
+            disablePictureInPicture
+            controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
+            aria-hidden="true"
+            tabIndex={-1}
+            className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover scale-105 brightness-95 contrast-115 saturate-150 hue-rotate-[320deg]"
+          >
+            <source src="/hero.mp4" type="video/mp4" />
+          </video>
+        </div>
 
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(14,165,233,0.35)_0%,rgba(0,0,0,0.08)_38%,rgba(249,115,22,0.30)_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.04),transparent_45%)]" />
-        <div className="absolute left-[-10%] top-[8%] h-[500px] w-[500px] rounded-full bg-sky-500/30 blur-3xl" />
-        <div className="absolute right-[-10%] bottom-[2%] h-[520px] w-[520px] rounded-full bg-orange-500/28 blur-3xl" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,132,199,0.08)_0%,rgba(0,0,0,0)_30%,rgba(234,88,12,0.10)_100%)]" />
+        <div className="absolute inset-0 z-10 bg-black/40" />
+        <div className="absolute inset-0 z-10 bg-[linear-gradient(90deg,rgba(14,165,233,0.35)_0%,rgba(0,0,0,0.08)_38%,rgba(249,115,22,0.30)_100%)]" />
+        <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.04),transparent_45%)]" />
+        <div className="absolute left-[-10%] top-[8%] z-10 h-[500px] w-[500px] rounded-full bg-sky-500/30 blur-3xl" />
+        <div className="absolute right-[-10%] bottom-[2%] z-10 h-[520px] w-[520px] rounded-full bg-orange-500/28 blur-3xl" />
+        <div className="absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(2,132,199,0.08)_0%,rgba(0,0,0,0)_30%,rgba(234,88,12,0.10)_100%)]" />
 
         <header className="relative z-30 flex items-center justify-between px-6 py-4 md:px-10">
           <Link href="/" className="flex items-center">
@@ -460,10 +467,16 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm md:pt-2">
-            <Link href="/about" className="text-white/70 transition hover:text-white hover:underline underline-offset-4">
+            <Link
+              href="/about"
+              className="text-white/70 transition hover:text-white hover:underline underline-offset-4"
+            >
               About Swift Tickets
             </Link>
-            <Link href="/terms" className="text-white/70 transition hover:text-white hover:underline underline-offset-4">
+            <Link
+              href="/terms"
+              className="text-white/70 transition hover:text-white hover:underline underline-offset-4"
+            >
               Terms & Conditions
             </Link>
             <Link
@@ -478,7 +491,10 @@ export default function HomePage() {
             >
               Privacy Policy
             </Link>
-            <Link href="/sell" className="text-white/70 transition hover:text-white hover:underline underline-offset-4">
+            <Link
+              href="/sell"
+              className="text-white/70 transition hover:text-white hover:underline underline-offset-4"
+            >
               Sell My Ticket
             </Link>
             <Link
@@ -487,10 +503,16 @@ export default function HomePage() {
             >
               Refund Policy
             </Link>
-            <Link href="/help" className="text-white/70 transition hover:text-white hover:underline underline-offset-4">
+            <Link
+              href="/help"
+              className="text-white/70 transition hover:text-white hover:underline underline-offset-4"
+            >
               Help Centre
             </Link>
-            <Link href="/legal" className="text-white/70 transition hover:text-white hover:underline underline-offset-4">
+            <Link
+              href="/legal"
+              className="text-white/70 transition hover:text-white hover:underline underline-offset-4"
+            >
               Legal
             </Link>
           </div>
@@ -529,7 +551,13 @@ export default function HomePage() {
                 >
                   <rect x="3" y="3" width="18" height="18" rx="5" />
                   <circle cx="12" cy="12" r="4" />
-                  <circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" />
+                  <circle
+                    cx="17.2"
+                    cy="6.8"
+                    r="1"
+                    fill="currentColor"
+                    stroke="none"
+                  />
                 </svg>
               </Link>
 
@@ -559,7 +587,11 @@ export default function HomePage() {
                 strokeWidth="2"
                 className="h-4 w-4"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m6 9 6 6 6-6"
+                />
               </svg>
             </button>
           </div>
