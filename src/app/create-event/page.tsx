@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Image from "next/image";
+import { ChangeEvent, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type TicketInput = {
@@ -14,18 +15,26 @@ export default function CreateEventPage() {
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [eventDate, setEventDate] = useState("");
+  const [eventTime, setEventTime] = useState("");
   const [organizerEmail, setOrganizerEmail] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
 
   const [tickets, setTickets] = useState<TicketInput[]>([
     { name: "", description: "", price: "", quantity: "" },
   ]);
 
   const addTicket = () => {
-    setTickets([
-      ...tickets,
+    setTickets((prev) => [
+      ...prev,
       { name: "", description: "", price: "", quantity: "" },
     ]);
+  };
+
+  const removeTicket = (index: number) => {
+    setTickets((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateTicket = (
@@ -38,176 +47,456 @@ export default function CreateEventPage() {
     setTickets(updated);
   };
 
+  const combinedDateTime = useMemo(() => {
+    if (!eventDate || !eventTime) return "";
+    return `${eventDate}T${eventTime}`;
+  }, [eventDate, eventTime]);
+
+  const previewDate = useMemo(() => {
+    if (!combinedDateTime) return "Select date and time";
+    const parsed = new Date(combinedDateTime);
+    if (Number.isNaN(parsed.getTime())) return "Select date and time";
+
+    return parsed.toLocaleString("en-ZA", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, [combinedDateTime]);
+
+  const lowestTicketPrice = useMemo(() => {
+    const validPrices = tickets
+      .map((ticket) => Number(ticket.price))
+      .filter((price) => !Number.isNaN(price) && price >= 0);
+
+    if (validPrices.length === 0) return null;
+    return Math.min(...validPrices);
+  }, [tickets]);
+
+  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const uploadEventImage = async (file: File) => {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const fileName = `event-${Date.now()}.${ext}`;
+    const filePath = `event-images/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("event-images")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const { data } = supabase.storage
+      .from("event-images")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  };
+
   const handleCreateEvent = async () => {
     try {
       setLoading(true);
 
-      if (!title || !location || !eventDate || !organizerEmail) {
-        alert("Please fill all fields");
+      if (!title.trim()) {
+        alert("Please enter an event title");
         return;
       }
 
-      const { data: event } = await supabase
+      if (!location.trim()) {
+        alert("Please enter a location");
+        return;
+      }
+
+      if (!eventDate) {
+        alert("Please select an event date");
+        return;
+      }
+
+      if (!eventTime) {
+        alert("Please select an event time");
+        return;
+      }
+
+      if (!organizerEmail.trim()) {
+        alert("Please enter organizer email");
+        return;
+      }
+
+      if (tickets.length === 0) {
+        alert("Please add at least one ticket type");
+        return;
+      }
+
+      for (const ticket of tickets) {
+        if (!ticket.name.trim()) {
+          alert("Each ticket must have a name");
+          return;
+        }
+
+        if (ticket.price === "" || Number(ticket.price) < 0) {
+          alert("Each ticket must have a valid price");
+          return;
+        }
+
+        if (ticket.quantity === "" || Number(ticket.quantity) < 0) {
+          alert("Each ticket must have a valid quantity");
+          return;
+        }
+      }
+
+      let imageUrl = "";
+
+      if (imageFile) {
+        imageUrl = await uploadEventImage(imageFile);
+      }
+
+      const { data: event, error: eventError } = await supabase
         .from("events")
         .insert([
           {
-            title,
-            location,
-            event_date: eventDate,
-            organizer_email: organizerEmail,
+            title: title.trim(),
+            location: location.trim(),
+            event_date: combinedDateTime,
+            organizer_email: organizerEmail.trim(),
+            image_url: imageUrl || null,
           },
         ])
         .select()
         .single();
 
+      if (eventError) {
+        console.error("Event creation error:", eventError);
+        alert(`Error creating event: ${eventError.message}`);
+        return;
+      }
+
       const ticketPayload = tickets.map((t) => ({
         event_id: event.id,
-        name: t.name,
-        description: t.description,
+        name: t.name.trim(),
+        description: t.description.trim(),
         price: Number(t.price),
         quantity: Number(t.quantity),
       }));
 
-      await supabase.from("ticket_types").insert(ticketPayload);
+      const { error: ticketError } = await supabase
+        .from("ticket_types")
+        .insert(ticketPayload);
 
-      alert("Event created successfully");
+      if (ticketError) {
+        console.error("Ticket creation error:", ticketError);
+        alert(`Error creating tickets: ${ticketError.message}`);
+        return;
+      }
+
+      alert("Event + Tickets created successfully!");
+
+      setTitle("");
+      setLocation("");
+      setEventDate("");
+      setEventTime("");
+      setOrganizerEmail("");
+      setImageFile(null);
+      setImagePreview("");
+      setTickets([{ name: "", description: "", price: "", quantity: "" }]);
+    } catch (error) {
+      console.error("Unexpected error:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unexpected error creating event"
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
-      <div className="max-w-[1300px] mx-auto grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-12">
-        
-        {/* LEFT - PREVIEW */}
-        <div>
-          <div className="w-full aspect-[0.9] bg-gradient-to-br from-zinc-800 to-black relative overflow-hidden mb-4">
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent p-6 flex items-end">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-gray-300 mb-2">
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto max-w-[1440px] px-6 py-8 md:px-8 md:py-10">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[360px_1fr] lg:gap-12">
+          <div>
+            <div className="relative mb-4 aspect-[0.9] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)]">
+              {imagePreview ? (
+                <Image
+                  src={imagePreview}
+                  alt="Event preview"
+                  fill
+                  unoptimized
+                  className="object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
+              )}
+
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+              <div className="absolute inset-x-0 bottom-0 p-6">
+                <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-gray-300">
                   Live event
                 </p>
-                <h2 className="text-3xl font-extrabold leading-tight uppercase">
+                <h2 className="text-[34px] font-extrabold uppercase leading-[0.95]">
                   {title || "Your Event"}
                 </h2>
               </div>
             </div>
+
+            <h3 className="mb-1 text-[16px] font-semibold">
+              {location || "Your location"}
+            </h3>
+
+            <p className="mb-6 text-[12px] text-gray-300">{previewDate}</p>
+
+            <div className="border border-white/15 bg-white/[0.03] p-4">
+              <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-white/60">
+                Tickets from
+              </p>
+              <p className="text-[24px] font-extrabold">
+                {lowestTicketPrice !== null
+                  ? `R${lowestTicketPrice.toFixed(2)}`
+                  : "R0.00"}
+              </p>
+            </div>
           </div>
 
-          <h3 className="text-lg font-semibold">{location || "Location"}</h3>
-          <p className="text-sm text-gray-400">
-            {eventDate
-              ? new Date(eventDate).toLocaleString()
-              : "Date & time"}
-          </p>
-        </div>
+          <div>
+            <div className="relative mb-6 overflow-hidden border border-white/10 bg-white/[0.03]">
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(249,115,22,0.14),rgba(59,130,246,0.14))]" />
+              <div className="relative px-6 py-6 md:px-8 md:py-7">
+                <p className="mb-2 text-[15px] text-gray-200">
+                  By Swift Tickets
+                </p>
+                <h1 className="mb-2 text-[42px] font-extrabold leading-[0.95] tracking-[-0.03em] md:text-[56px]">
+                  Create Event
+                </h1>
+                <p className="text-[14px] text-white/75">
+                  Build your event listing, upload your artwork, and add ticket
+                  types in one place.
+                </p>
+              </div>
+            </div>
 
-        {/* RIGHT - FORM */}
-        <div>
-          <h1 className="text-5xl font-extrabold mb-8">
-            Create Event
-          </h1>
+            <div className="mb-8 border border-white/15">
+              <div className="border-b border-white/15 px-6 py-4">
+                <h2 className="text-[28px] font-extrabold tracking-[-0.03em]">
+                  Event Details
+                </h2>
+              </div>
 
-          {/* EVENT DETAILS */}
-          <div className="grid gap-4 mb-10">
-            <input
-              placeholder="Event Title"
-              className="bg-transparent border border-white/30 px-4 py-3 outline-none focus:border-white"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-
-            <input
-              placeholder="Location"
-              className="bg-transparent border border-white/30 px-4 py-3 outline-none focus:border-white"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
-
-            <input
-              type="datetime-local"
-              className="bg-transparent border border-white/30 px-4 py-3 outline-none focus:border-white"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-            />
-
-            <input
-              placeholder="Organizer Email"
-              className="bg-transparent border border-white/30 px-4 py-3 outline-none focus:border-white"
-              value={organizerEmail}
-              onChange={(e) => setOrganizerEmail(e.target.value)}
-            />
-          </div>
-
-          {/* TICKETS */}
-          <h2 className="text-3xl font-extrabold mb-6">Tickets</h2>
-
-          <div className="space-y-4 mb-6">
-            {tickets.map((ticket, index) => (
-              <div
-                key={index}
-                className="border border-white/40 p-5 flex flex-col gap-3"
-              >
-                <input
-                  placeholder="Ticket Name"
-                  className="bg-transparent border border-white/20 px-3 py-2 outline-none"
-                  value={ticket.name}
-                  onChange={(e) =>
-                    updateTicket(index, "name", e.target.value)
-                  }
-                />
-
-                <input
-                  placeholder="Description"
-                  className="bg-transparent border border-white/20 px-3 py-2 outline-none"
-                  value={ticket.description}
-                  onChange={(e) =>
-                    updateTicket(index, "description", e.target.value)
-                  }
-                />
-
-                <div className="flex gap-3">
+              <div className="grid gap-5 p-6 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                    Event Title
+                  </label>
                   <input
-                    placeholder="Price"
-                    type="number"
-                    className="w-full bg-transparent border border-white/20 px-3 py-2 outline-none"
-                    value={ticket.price}
-                    onChange={(e) =>
-                      updateTicket(index, "price", e.target.value)
-                    }
-                  />
-
-                  <input
-                    placeholder="Qty"
-                    type="number"
-                    className="w-full bg-transparent border border-white/20 px-3 py-2 outline-none"
-                    value={ticket.quantity}
-                    onChange={(e) =>
-                      updateTicket(index, "quantity", e.target.value)
-                    }
+                    placeholder="Enter your event title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
                   />
                 </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                    Location
+                  </label>
+                  <input
+                    placeholder="Venue or address"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                    Event Date
+                  </label>
+                  <input
+                    type="date"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition focus:border-white/70"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                    Event Time
+                  </label>
+                  <input
+                    type="time"
+                    value={eventTime}
+                    onChange={(e) => setEventTime(e.target.value)}
+                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition focus:border-white/70"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                    Organizer Email
+                  </label>
+                  <input
+                    placeholder="name@example.com"
+                    value={organizerEmail}
+                    onChange={(e) => setOrganizerEmail(e.target.value)}
+                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                    Event Artwork
+                  </label>
+
+                  <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center border border-dashed border-white/25 bg-white/[0.02] px-6 text-center transition hover:border-white/45 hover:bg-white/[0.04]">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                    <span className="mb-2 text-[14px] font-semibold text-white">
+                      {imageFile ? imageFile.name : "Upload event image"}
+                    </span>
+                    <span className="text-[12px] text-white/55">
+                      PNG, JPG or WEBP for your event poster or banner
+                    </span>
+                  </label>
+                </div>
               </div>
-            ))}
+            </div>
+
+            <div className="mb-8">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-[35px] font-extrabold tracking-[-0.04em]">
+                  Tickets
+                </h2>
+
+                <button
+                  onClick={addTicket}
+                  disabled={loading}
+                  className="border border-white/70 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] transition hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  + Add Ticket
+                </button>
+              </div>
+
+              <div className="grid gap-4">
+                {tickets.map((ticket, index) => (
+                  <div
+                    key={index}
+                    className="border border-white/65 bg-transparent p-5"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-4">
+                      <p className="text-[16px] font-bold">
+                        Ticket {index + 1}
+                      </p>
+
+                      {tickets.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeTicket(index)}
+                          className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/60 transition hover:text-white"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="md:col-span-2">
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Ticket Name
+                        </label>
+                        <input
+                          placeholder="e.g. General, VIP, Early Bird"
+                          value={ticket.name}
+                          onChange={(e) =>
+                            updateTicket(index, "name", e.target.value)
+                          }
+                          className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Description
+                        </label>
+                        <input
+                          placeholder="What does this ticket include?"
+                          value={ticket.description}
+                          onChange={(e) =>
+                            updateTicket(index, "description", e.target.value)
+                          }
+                          className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Price
+                        </label>
+                        <input
+                          placeholder="0.00"
+                          type="number"
+                          min="0"
+                          value={ticket.price}
+                          onChange={(e) =>
+                            updateTicket(index, "price", e.target.value)
+                          }
+                          className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Quantity
+                        </label>
+                        <input
+                          placeholder="0"
+                          type="number"
+                          min="0"
+                          value={ticket.quantity}
+                          onChange={(e) =>
+                            updateTicket(index, "quantity", e.target.value)
+                          }
+                          className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <button
+                onClick={handleCreateEvent}
+                disabled={loading}
+                className="bg-white px-8 py-4 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Creating..." : "Create Event"}
+              </button>
+
+              <p className="text-[12px] uppercase tracking-[0.08em] text-white/45">
+                Your event and ticket types will be created together
+              </p>
+            </div>
           </div>
-
-          <button
-            onClick={addTicket}
-            className="border border-white px-6 py-3 text-sm font-bold hover:bg-white hover:text-black transition mb-8"
-          >
-            + Add Ticket
-          </button>
-
-          <br />
-
-          <button
-            onClick={handleCreateEvent}
-            disabled={loading}
-            className="bg-white text-black px-8 py-4 font-bold text-sm hover:bg-white/90 transition"
-          >
-            {loading ? "Creating..." : "Create Event"}
-          </button>
         </div>
       </div>
     </main>
