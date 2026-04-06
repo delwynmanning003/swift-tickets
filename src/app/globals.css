@@ -18,6 +18,11 @@
     --foreground: #ededed;
   }
 }
+
+video {
+  pointer-events: none;
+}
+
 video::-webkit-media-controls {
   display: none !important;
   -webkit-appearance: none;
