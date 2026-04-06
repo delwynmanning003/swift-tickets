@@ -42,164 +42,174 @@ export default function CreateEventPage() {
     try {
       setLoading(true);
 
-      if (!title.trim()) {
-        alert("Please enter an event title");
+      if (!title || !location || !eventDate || !organizerEmail) {
+        alert("Please fill all fields");
         return;
       }
 
-      if (!location.trim()) {
-        alert("Please enter a location");
-        return;
-      }
-
-      if (!eventDate) {
-        alert("Please select an event date");
-        return;
-      }
-
-      if (!organizerEmail.trim()) {
-        alert("Please enter organizer email");
-        return;
-      }
-
-      if (tickets.length === 0) {
-        alert("Please add at least one ticket type");
-        return;
-      }
-
-      for (const ticket of tickets) {
-        if (!ticket.name.trim()) {
-          alert("Each ticket must have a name");
-          return;
-        }
-
-        if (ticket.price === "" || Number(ticket.price) < 0) {
-          alert("Each ticket must have a valid price");
-          return;
-        }
-
-        if (ticket.quantity === "" || Number(ticket.quantity) < 0) {
-          alert("Each ticket must have a valid quantity");
-          return;
-        }
-      }
-
-      const { data: event, error: eventError } = await supabase
+      const { data: event } = await supabase
         .from("events")
         .insert([
           {
-            title: title.trim(),
-            location: location.trim(),
+            title,
+            location,
             event_date: eventDate,
-            organizer_email: organizerEmail.trim(),
+            organizer_email: organizerEmail,
           },
         ])
         .select()
         .single();
 
-      if (eventError) {
-        console.error("Event creation error:", eventError);
-        alert(`Error creating event: ${eventError.message}`);
-        return;
-      }
-
       const ticketPayload = tickets.map((t) => ({
         event_id: event.id,
-        name: t.name.trim(),
-        description: t.description.trim(),
+        name: t.name,
+        description: t.description,
         price: Number(t.price),
         quantity: Number(t.quantity),
       }));
 
-      const { error: ticketError } = await supabase
-        .from("ticket_types")
-        .insert(ticketPayload);
+      await supabase.from("ticket_types").insert(ticketPayload);
 
-      if (ticketError) {
-        console.error("Ticket creation error:", ticketError);
-        alert(`Error creating tickets: ${ticketError.message}`);
-        return;
-      }
-
-      alert("Event + Tickets created successfully!");
-
-      setTitle("");
-      setLocation("");
-      setEventDate("");
-      setOrganizerEmail("");
-      setTickets([{ name: "", description: "", price: "", quantity: "" }]);
-    } catch (error) {
-      console.error("Unexpected error:", error);
-      alert("Unexpected error creating event");
+      alert("Event created successfully");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main style={{ padding: 40 }}>
-      <h1>Create Event</h1>
+    <main className="min-h-screen bg-black text-white px-6 py-10">
+      <div className="max-w-[1300px] mx-auto grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-12">
+        
+        {/* LEFT - PREVIEW */}
+        <div>
+          <div className="w-full aspect-[0.9] bg-gradient-to-br from-zinc-800 to-black relative overflow-hidden mb-4">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent p-6 flex items-end">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-gray-300 mb-2">
+                  Live event
+                </p>
+                <h2 className="text-3xl font-extrabold leading-tight uppercase">
+                  {title || "Your Event"}
+                </h2>
+              </div>
+            </div>
+          </div>
 
-      <input
-        placeholder="Event Title"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-      />
-      <input
-        placeholder="Location"
-        value={location}
-        onChange={(e) => setLocation(e.target.value)}
-      />
-      <input
-        type="datetime-local"
-        value={eventDate}
-        onChange={(e) => setEventDate(e.target.value)}
-      />
-      <input
-        placeholder="Organizer Email"
-        value={organizerEmail}
-        onChange={(e) => setOrganizerEmail(e.target.value)}
-      />
-
-      <h2 style={{ marginTop: 30 }}>Tickets</h2>
-
-      {tickets.map((ticket, index) => (
-        <div key={index} style={{ marginBottom: 20 }}>
-          <input
-            placeholder="Ticket Name (e.g VIP)"
-            value={ticket.name}
-            onChange={(e) => updateTicket(index, "name", e.target.value)}
-          />
-          <input
-            placeholder="Description"
-            value={ticket.description}
-            onChange={(e) => updateTicket(index, "description", e.target.value)}
-          />
-          <input
-            placeholder="Price"
-            type="number"
-            value={ticket.price}
-            onChange={(e) => updateTicket(index, "price", e.target.value)}
-          />
-          <input
-            placeholder="Quantity"
-            type="number"
-            value={ticket.quantity}
-            onChange={(e) => updateTicket(index, "quantity", e.target.value)}
-          />
+          <h3 className="text-lg font-semibold">{location || "Location"}</h3>
+          <p className="text-sm text-gray-400">
+            {eventDate
+              ? new Date(eventDate).toLocaleString()
+              : "Date & time"}
+          </p>
         </div>
-      ))}
 
-      <button onClick={addTicket} disabled={loading}>
-        + Add Another Ticket
-      </button>
+        {/* RIGHT - FORM */}
+        <div>
+          <h1 className="text-5xl font-extrabold mb-8">
+            Create Event
+          </h1>
 
-      <br />
-      <br />
+          {/* EVENT DETAILS */}
+          <div className="grid gap-4 mb-10">
+            <input
+              placeholder="Event Title"
+              className="bg-transparent border border-white/30 px-4 py-3 outline-none focus:border-white"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
 
-      <button onClick={handleCreateEvent} disabled={loading}>
-        {loading ? "Creating..." : "Create Event"}
-      </button>
+            <input
+              placeholder="Location"
+              className="bg-transparent border border-white/30 px-4 py-3 outline-none focus:border-white"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+            />
+
+            <input
+              type="datetime-local"
+              className="bg-transparent border border-white/30 px-4 py-3 outline-none focus:border-white"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+            />
+
+            <input
+              placeholder="Organizer Email"
+              className="bg-transparent border border-white/30 px-4 py-3 outline-none focus:border-white"
+              value={organizerEmail}
+              onChange={(e) => setOrganizerEmail(e.target.value)}
+            />
+          </div>
+
+          {/* TICKETS */}
+          <h2 className="text-3xl font-extrabold mb-6">Tickets</h2>
+
+          <div className="space-y-4 mb-6">
+            {tickets.map((ticket, index) => (
+              <div
+                key={index}
+                className="border border-white/40 p-5 flex flex-col gap-3"
+              >
+                <input
+                  placeholder="Ticket Name"
+                  className="bg-transparent border border-white/20 px-3 py-2 outline-none"
+                  value={ticket.name}
+                  onChange={(e) =>
+                    updateTicket(index, "name", e.target.value)
+                  }
+                />
+
+                <input
+                  placeholder="Description"
+                  className="bg-transparent border border-white/20 px-3 py-2 outline-none"
+                  value={ticket.description}
+                  onChange={(e) =>
+                    updateTicket(index, "description", e.target.value)
+                  }
+                />
+
+                <div className="flex gap-3">
+                  <input
+                    placeholder="Price"
+                    type="number"
+                    className="w-full bg-transparent border border-white/20 px-3 py-2 outline-none"
+                    value={ticket.price}
+                    onChange={(e) =>
+                      updateTicket(index, "price", e.target.value)
+                    }
+                  />
+
+                  <input
+                    placeholder="Qty"
+                    type="number"
+                    className="w-full bg-transparent border border-white/20 px-3 py-2 outline-none"
+                    value={ticket.quantity}
+                    onChange={(e) =>
+                      updateTicket(index, "quantity", e.target.value)
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={addTicket}
+            className="border border-white px-6 py-3 text-sm font-bold hover:bg-white hover:text-black transition mb-8"
+          >
+            + Add Ticket
+          </button>
+
+          <br />
+
+          <button
+            onClick={handleCreateEvent}
+            disabled={loading}
+            className="bg-white text-black px-8 py-4 font-bold text-sm hover:bg-white/90 transition"
+          >
+            {loading ? "Creating..." : "Create Event"}
+          </button>
+        </div>
+      </div>
     </main>
   );
 }
