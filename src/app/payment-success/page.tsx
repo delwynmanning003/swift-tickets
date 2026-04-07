@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-export default function PaymentSuccess() {
+export const dynamic = "force-dynamic";
+
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const reference = searchParams.get("reference");
 
@@ -187,5 +189,13 @@ export default function PaymentSuccess() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function PaymentSuccess() {
+  return (
+    <Suspense fallback={<main style={{ padding: 40 }}>Loading...</main>}>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }
