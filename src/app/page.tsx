@@ -417,7 +417,7 @@ export default function HomePage() {
 
         <div className="relative z-20 flex min-h-[68vh] flex-col items-center justify-start px-4 pt-10 text-center sm:px-6 sm:pt-14 md:min-h-[70vh] md:px-6 md:pt-16">
           <h1 className="max-w-[320px] text-[48px] font-extrabold leading-[0.9] tracking-tight sm:max-w-[540px] sm:text-[64px] md:max-w-5xl md:text-[72px] lg:text-[86px]">
-            Where the world meets
+            Where mobile works
           </h1>
 
           <p className="mt-3 max-w-[320px] text-[10px] uppercase tracking-[0.28em] text-white/80 sm:max-w-none sm:text-[11px] md:mt-2 md:text-[13px]">
