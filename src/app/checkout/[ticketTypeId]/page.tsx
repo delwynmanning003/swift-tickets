@@ -14,6 +14,7 @@ export default function CheckoutPage() {
   const [ticket, setTicket] = useState<any>(null);
   const [eventData, setEventData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -89,9 +90,19 @@ export default function CheckoutPage() {
 
   const serviceFee = Math.max(amounts.buyerTotal - amounts.baseAmount, 0);
 
-  const handleOrder = async () => {
+  const handlePay = async () => {
     if (!ticket || !eventData) {
       alert("Ticket or event not loaded");
+      return;
+    }
+
+    if (!buyerName.trim()) {
+      alert("Please enter your full name");
+      return;
+    }
+
+    if (!buyerEmail.trim()) {
+      alert("Please enter your email address");
       return;
     }
 
@@ -100,69 +111,74 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (ticket.quantity < quantity) {
+    if (Number(ticket.quantity) < quantity) {
       alert("Not enough tickets available");
       return;
     }
 
-    const newRemainingQuantity = Number(ticket.quantity) - quantity;
+    try {
+      setPaying(true);
 
-    const { data: order, error } = await supabase
-      .from("orders")
-      .insert([
-        {
-          ticket_type_id: ticketTypeId,
-          buyer_name: buyerName,
-          buyer_email: buyerEmail,
-          quantity,
-          status: "pending",
-          base_amount: amounts.baseAmount,
-          fixed_fee: amounts.fixedFee,
-          percentage_fee: amounts.percentageFee,
-          buyer_total: amounts.buyerTotal,
-          organizer_payout: amounts.organizerPayout,
+      const reference = `swift_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert([
+          {
+            ticket_type_id: ticketTypeId,
+            buyer_name: buyerName.trim(),
+            buyer_email: buyerEmail.trim(),
+            quantity,
+            status: "pending",
+            base_amount: amounts.baseAmount,
+            fixed_fee: amounts.fixedFee,
+            percentage_fee: amounts.percentageFee,
+            buyer_total: amounts.buyerTotal,
+            organizer_payout: amounts.organizerPayout,
+            reference,
+          },
+        ])
+        .select()
+        .single();
+
+      if (orderError) {
+        alert(orderError.message);
+        return;
+      }
+
+      const response = await fetch("/api/paystack/initialize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ])
-      .select()
-      .single();
+        body: JSON.stringify({
+          email: buyerEmail.trim(),
+          amount: amounts.buyerTotal,
+          reference,
+          metadata: {
+            order_id: order.id,
+            ticket_type_id: ticketTypeId,
+            quantity,
+            buyer_name: buyerName.trim(),
+            buyer_email: buyerEmail.trim(),
+          },
+        }),
+      });
 
-    if (error) {
-      alert(error.message);
-      return;
+      const data = await response.json();
+
+      if (!response.ok || !data?.status || !data?.data?.authorization_url) {
+        alert(data?.message || "Failed to initialize payment");
+        return;
+      }
+
+      window.location.href = data.data.authorization_url;
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong while starting payment");
+    } finally {
+      setPaying(false);
     }
-
-    const ticketRows = Array.from({ length: quantity }).map(() => ({
-      order_id: order.id,
-      ticket_type_id: ticketTypeId,
-      qr_code: crypto.randomUUID(),
-      checked_in: false,
-    }));
-
-    const { error: ticketInsertError } = await supabase
-      .from("tickets")
-      .insert(ticketRows);
-
-    if (ticketInsertError) {
-      alert(ticketInsertError.message);
-      return;
-    }
-
-    const { error: quantityUpdateError } = await supabase
-      .from("ticket_types")
-      .update({ quantity: newRemainingQuantity })
-      .eq("id", ticketTypeId);
-
-    if (quantityUpdateError) {
-      alert(quantityUpdateError.message);
-      return;
-    }
-
-    alert("Order created and tickets generated successfully!");
-
-    setTicket({
-      ...ticket,
-      quantity: newRemainingQuantity,
-    });
   };
 
   if (loading) {
@@ -200,7 +216,9 @@ export default function CheckoutPage() {
 
       {soldOut ? (
         <div>
-          <p><strong>Sold Out</strong></p>
+          <p>
+            <strong>Sold Out</strong>
+          </p>
         </div>
       ) : (
         <>
@@ -246,7 +264,9 @@ export default function CheckoutPage() {
             </p>
           </div>
 
-          <button onClick={handleOrder}>Confirm Order</button>
+          <button onClick={handlePay} disabled={paying}>
+            {paying ? "Redirecting..." : `Pay R${amounts.buyerTotal.toFixed(2)}`}
+          </button>
         </>
       )}
     </main>
