@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ChangeEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type TicketInput = {
@@ -18,9 +18,6 @@ export default function CreateEventPage() {
   const [eventTime, setEventTime] = useState("");
   const [organizerEmail, setOrganizerEmail] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>("");
 
   const [tickets, setTickets] = useState<TicketInput[]>([
     { name: "", description: "", price: "", quantity: "" },
@@ -76,37 +73,6 @@ export default function CreateEventPage() {
     return Math.min(...validPrices);
   }, [tickets]);
 
-  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  };
-
-  const uploadEventImage = async (file: File) => {
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const fileName = `event-${Date.now()}.${ext}`;
-    const filePath = `event-images/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("event-images")
-      .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw new Error(uploadError.message);
-    }
-
-    const { data } = supabase.storage
-      .from("event-images")
-      .getPublicUrl(filePath);
-
-    return data.publicUrl;
-  };
-
   const handleCreateEvent = async () => {
     try {
       setLoading(true);
@@ -158,12 +124,6 @@ export default function CreateEventPage() {
         }
       }
 
-      let imageUrl = "";
-
-      if (imageFile) {
-        imageUrl = await uploadEventImage(imageFile);
-      }
-
       const { data: event, error: eventError } = await supabase
         .from("events")
         .insert([
@@ -172,7 +132,6 @@ export default function CreateEventPage() {
             location: location.trim(),
             event_date: combinedDateTime,
             organizer_email: organizerEmail.trim(),
-            image_url: imageUrl || null,
           },
         ])
         .select()
@@ -209,8 +168,6 @@ export default function CreateEventPage() {
       setEventDate("");
       setEventTime("");
       setOrganizerEmail("");
-      setImageFile(null);
-      setImagePreview("");
       setTickets([{ name: "", description: "", price: "", quantity: "" }]);
     } catch (error) {
       console.error("Unexpected error:", error);
@@ -230,18 +187,7 @@ export default function CreateEventPage() {
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[360px_1fr] lg:gap-12">
           <div>
             <div className="relative mb-4 aspect-[0.9] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)]">
-              {imagePreview ? (
-                <Image
-                  src={imagePreview}
-                  alt="Event preview"
-                  fill
-                  unoptimized
-                  className="object-cover"
-                />
-              ) : (
-                <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
-              )}
-
+              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
               <div className="absolute inset-x-0 bottom-0 p-6">
@@ -283,8 +229,7 @@ export default function CreateEventPage() {
                   Create Event
                 </h1>
                 <p className="text-[14px] text-white/75">
-                  Build your event listing, upload your artwork, and add ticket
-                  types in one place.
+                  Build your event listing and add ticket types in one place.
                 </p>
               </div>
             </div>
@@ -355,27 +300,6 @@ export default function CreateEventPage() {
                     onChange={(e) => setOrganizerEmail(e.target.value)}
                     className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
                   />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                    Event Artwork
-                  </label>
-
-                  <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center border border-dashed border-white/25 bg-white/[0.02] px-6 text-center transition hover:border-white/45 hover:bg-white/[0.04]">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                    />
-                    <span className="mb-2 text-[14px] font-semibold text-white">
-                      {imageFile ? imageFile.name : "Upload event image"}
-                    </span>
-                    <span className="text-[12px] text-white/55">
-                      PNG, JPG or WEBP for your event poster or banner
-                    </span>
-                  </label>
                 </div>
               </div>
             </div>
