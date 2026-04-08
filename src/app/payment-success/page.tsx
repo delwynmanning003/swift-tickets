@@ -1,89 +1,473 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
-export const dynamic = "force-dynamic";
+type TicketType = {
+  id: string;
+  event_id: string;
+  name: string;
+  price: number;
+  quantity: number;
+};
 
-function PaymentSuccessContent() {
-  const searchParams = useSearchParams();
-  const reference = searchParams.get("reference");
+type EventType = {
+  id: string;
+  title?: string;
+  location?: string;
+  event_date?: string;
+  fee_option?: "split" | "organizer_pays_all" | "buyer_pays_all" | null;
+};
 
-  const [status, setStatus] = useState<
-    "verifying" | "success" | "failed" | "missing"
-  >("verifying");
-  const [message, setMessage] = useState("Verifying your payment...");
+export default function CheckoutPage() {
+  const params = useParams();
+  const ticketTypeId = params.ticketTypeId as string;
+
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const [quantity, setQuantity] = useState(1);
+
+  const [ticket, setTicket] = useState<TicketType | null>(null);
+  const [eventData, setEventData] = useState<EventType | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
-    const verifyPayment = async () => {
-      if (!reference) {
-        setStatus("missing");
-        setMessage("Missing payment reference.");
-        return;
-      }
-
+    const loadData = async () => {
       try {
-        const verifyRes = await fetch(
-          `/api/paystack/verify?reference=${encodeURIComponent(reference)}`
-        );
+        setLoading(true);
 
-        const verifyData = await verifyRes.json();
+        const { data: ticketData, error: ticketError } = await supabase
+          .from("ticket_types")
+          .select("*")
+          .eq("id", ticketTypeId)
+          .single();
 
-        if (!verifyRes.ok || !verifyData?.success) {
-          setStatus("failed");
-          setMessage(verifyData?.error || "Payment verification failed.");
+        if (ticketError || !ticketData) {
+          console.error("Ticket load error:", ticketError);
+          setTicket(null);
+          setEventData(null);
           return;
         }
 
-        setStatus("success");
-        setMessage("Payment confirmed. Your tickets have been issued.");
+        setTicket(ticketData);
+
+        const { data: eventRow, error: eventError } = await supabase
+          .from("events")
+          .select("*")
+          .eq("id", ticketData.event_id)
+          .single();
+
+        if (eventError) {
+          console.error("Event load error:", eventError);
+        }
+
+        setEventData(eventRow ?? null);
       } catch (error) {
-        console.error(error);
-        setStatus("failed");
-        setMessage("Something went wrong while verifying payment.");
+        console.error("Unexpected load error:", error);
+        setTicket(null);
+        setEventData(null);
+      } finally {
+        setLoading(false);
       }
     };
 
-    verifyPayment();
-  }, [reference]);
+    if (ticketTypeId) {
+      loadData();
+    }
+  }, [ticketTypeId]);
+
+  const amounts = useMemo(() => {
+    if (!ticket || !eventData) {
+      return {
+        baseAmount: 0,
+        fixedFee: 0,
+        percentageFee: 0,
+        buyerTotal: 0,
+        organizerPayout: 0,
+      };
+    }
+
+    const baseAmount = Number(ticket.price) * quantity;
+    const fixedFee = 2 * quantity;
+    const percentageFee = baseAmount * 0.03;
+
+    let buyerTotal = baseAmount;
+    let organizerPayout = baseAmount;
+
+    if (eventData.fee_option === "split") {
+      buyerTotal = baseAmount + percentageFee;
+      organizerPayout = baseAmount - fixedFee;
+    }
+
+    if (eventData.fee_option === "organizer_pays_all") {
+      buyerTotal = baseAmount;
+      organizerPayout = baseAmount - fixedFee - percentageFee;
+    }
+
+    if (eventData.fee_option === "buyer_pays_all") {
+      buyerTotal = baseAmount + fixedFee + percentageFee;
+      organizerPayout = baseAmount;
+    }
+
+    return {
+      baseAmount,
+      fixedFee,
+      percentageFee,
+      buyerTotal,
+      organizerPayout,
+    };
+  }, [ticket, eventData, quantity]);
+
+  const serviceFee = Math.max(amounts.buyerTotal - amounts.baseAmount, 0);
+  const isFreeTicket = amounts.buyerTotal === 0;
+
+  const handlePay = async () => {
+    if (!ticket || !eventData) {
+      alert("Ticket or event not loaded");
+      return;
+    }
+
+    if (!buyerName.trim()) {
+      alert("Please enter your full name");
+      return;
+    }
+
+    if (!buyerEmail.trim()) {
+      alert("Please enter your email address");
+      return;
+    }
+
+    if (quantity < 1) {
+      alert("Quantity must be at least 1");
+      return;
+    }
+
+    if (Number(ticket.quantity) < quantity) {
+      alert("Not enough tickets available");
+      return;
+    }
+
+    try {
+      setPaying(true);
+
+      // FREE TICKET FLOW
+      if (isFreeTicket) {
+        const reference = `free_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+
+        const { data: order, error: orderError } = await supabase
+          .from("orders")
+          .insert([
+            {
+              ticket_type_id: ticketTypeId,
+              buyer_name: buyerName.trim(),
+              buyer_email: buyerEmail.trim(),
+              quantity,
+              status: "paid",
+              base_amount: 0,
+              fixed_fee: 0,
+              percentage_fee: 0,
+              buyer_total: 0,
+              organizer_payout: 0,
+              reference,
+            },
+          ])
+          .select()
+          .single();
+
+        if (orderError || !order) {
+          console.error("Free order creation error:", orderError);
+          alert(orderError?.message || "Failed to create free order");
+          return;
+        }
+
+        const { data: ticketType, error: ticketTypeError } = await supabase
+          .from("ticket_types")
+          .select("*")
+          .eq("id", ticketTypeId)
+          .single();
+
+        if (ticketTypeError || !ticketType) {
+          console.error("Ticket type load error:", ticketTypeError);
+          alert("Ticket type not found");
+          return;
+        }
+
+        if (Number(ticketType.quantity) < quantity) {
+          alert("Not enough tickets available");
+          return;
+        }
+
+        const ticketRows = Array.from({ length: quantity }).map(() => ({
+          order_id: order.id,
+          ticket_type_id: ticketTypeId,
+          qr_code: crypto.randomUUID(),
+          checked_in: false,
+        }));
+
+        const { error: insertTicketsError } = await supabase
+          .from("tickets")
+          .insert(ticketRows);
+
+        if (insertTicketsError) {
+          console.error("Free ticket insert error:", insertTicketsError);
+          alert(insertTicketsError.message);
+          return;
+        }
+
+        const { error: updateQuantityError } = await supabase
+          .from("ticket_types")
+          .update({
+            quantity: Number(ticketType.quantity) - quantity,
+          })
+          .eq("id", ticketTypeId);
+
+        if (updateQuantityError) {
+          console.error("Free ticket quantity update error:", updateQuantityError);
+          alert(updateQuantityError.message);
+          return;
+        }
+
+        window.location.href = `/payment-success?reference=${encodeURIComponent(
+          reference
+        )}`;
+        return;
+      }
+
+      // PAID TICKET FLOW
+      const reference = `swift_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert([
+          {
+            ticket_type_id: ticketTypeId,
+            buyer_name: buyerName.trim(),
+            buyer_email: buyerEmail.trim(),
+            quantity,
+            status: "pending",
+            base_amount: amounts.baseAmount,
+            fixed_fee: amounts.fixedFee,
+            percentage_fee: amounts.percentageFee,
+            buyer_total: amounts.buyerTotal,
+            organizer_payout: amounts.organizerPayout,
+            reference,
+          },
+        ])
+        .select()
+        .single();
+
+      if (orderError || !order) {
+        console.error("Order creation error:", orderError);
+        alert(orderError?.message || "Failed to create order");
+        return;
+      }
+
+      const response = await fetch("/api/paystack/initialize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: buyerEmail.trim(),
+          fullName: buyerName.trim(),
+          amount: amounts.buyerTotal,
+          orderId: order.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Initialize payment error:", data);
+        alert(data.error || "Failed to initialize payment");
+        return;
+      }
+
+      if (!data.url) {
+        console.error("No payment URL returned:", data);
+        alert("No payment URL returned");
+        return;
+      }
+
+      if (data.reference) {
+        const { error: updateError } = await supabase
+          .from("orders")
+          .update({
+            reference: data.reference,
+          })
+          .eq("id", order.id);
+
+        if (updateError) {
+          console.error("Failed to save payment reference:", updateError);
+        }
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      console.error("Payment error:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while starting checkout"
+      );
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-black px-6 py-10 text-white">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="mb-4 text-3xl font-bold">Checkout</h1>
+          <p className="text-white/70">Loading...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!ticket) {
+    return (
+      <main className="min-h-screen bg-black px-6 py-10 text-white">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="mb-4 text-3xl font-bold">Checkout</h1>
+          <p className="text-white/70">Ticket not found.</p>
+        </div>
+      </main>
+    );
+  }
+
+  const soldOut = Number(ticket.quantity) <= 0;
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
-      <div className="mx-auto max-w-2xl border border-white/10 bg-white/[0.03] p-8">
-        <p className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
-          Swift Tickets
-        </p>
-        <h1 className="mb-4 text-4xl font-extrabold tracking-[-0.03em]">
-          {status === "verifying" && "Verifying Payment..."}
-          {status === "success" && "Payment Successful 🎉"}
-          {status === "failed" && "Payment Verification Failed"}
-          {status === "missing" && "Invalid Payment Link"}
-        </h1>
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto max-w-3xl px-6 py-10">
+        <div className="mb-8 border border-white/10 bg-white/[0.03] p-6">
+          <p className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
+            Swift Tickets
+          </p>
+          <h1 className="text-4xl font-extrabold tracking-[-0.03em]">
+            Checkout
+          </h1>
+          {eventData?.title && (
+            <p className="mt-3 text-lg text-white/75">{eventData.title}</p>
+          )}
+        </div>
 
-        <p
-          className={
-            status === "success"
-              ? "text-green-400"
-              : status === "failed" || status === "missing"
-              ? "text-red-400"
-              : "text-white/75"
-          }
-        >
-          {message}
-        </p>
+        <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+          <div className="border border-white/10 bg-white/[0.03] p-6">
+            <h2 className="mb-5 text-2xl font-bold">Buyer Details</h2>
 
-        {reference && (
-          <p className="mt-4 text-sm text-white/50">Reference: {reference}</p>
-        )}
+            {soldOut ? (
+              <div className="rounded-none border border-red-500/40 bg-red-500/10 p-4">
+                <p className="font-semibold text-red-300">Sold Out</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter your full name"
+                    value={buyerName}
+                    onChange={(e) => setBuyerName(e.target.value)}
+                    className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none placeholder:text-white/30 focus:border-white/60"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="Enter your email address"
+                    value={buyerEmail}
+                    onChange={(e) => setBuyerEmail(e.target.value)}
+                    className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none placeholder:text-white/30 focus:border-white/60"
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={ticket.quantity}
+                    value={quantity}
+                    onChange={(e) =>
+                      setQuantity(Math.max(1, Number(e.target.value) || 1))
+                    }
+                    className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none focus:border-white/60"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="border border-white/10 bg-white/[0.03] p-6">
+            <h2 className="mb-5 text-2xl font-bold">Order Summary</h2>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-white/65">Ticket</span>
+                <span className="text-right font-medium">{ticket.name}</span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-white/65">Price per ticket</span>
+                <span className="font-medium">
+                  R{Number(ticket.price).toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-white/65">Subtotal</span>
+                <span className="font-medium">
+                  R{amounts.baseAmount.toFixed(2)}
+                </span>
+              </div>
+
+              {serviceFee > 0 && (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-white/65">Service Fee</span>
+                  <span className="font-medium">
+                    R{serviceFee.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              <div className="border-t border-white/10 pt-3">
+                <div className="flex items-center justify-between gap-4 text-base font-bold">
+                  <span>Total Due</span>
+                  <span>R{amounts.buyerTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {!soldOut && (
+              <button
+                onClick={handlePay}
+                disabled={paying}
+                className="mt-6 w-full bg-white px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {paying
+                  ? "Redirecting..."
+                  : isFreeTicket
+                  ? "Get Free Ticket"
+                  : `Pay R${amounts.buyerTotal.toFixed(2)}`}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </main>
-  );
-}
-
-export default function PaymentSuccess() {
-  return (
-    <Suspense fallback={<main className="p-10 text-white">Loading...</main>}>
-      <PaymentSuccessContent />
-    </Suspense>
   );
 }
