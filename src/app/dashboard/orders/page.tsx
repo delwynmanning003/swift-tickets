@@ -177,64 +177,34 @@ export default function DashboardPage() {
     try {
       setDeletingId(eventId);
 
-      const eventTicketTypes = ticketTypes.filter(
-        (ticket) => ticket.event_id === eventId
-      );
-      const ticketTypeIds = eventTicketTypes.map((ticket) => ticket.id);
+      const response = await fetch("/api/events/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventId,
+          organizerEmail: email,
+        }),
+      });
 
-      if (ticketTypeIds.length > 0) {
-        const eventOrders = orders.filter((order) =>
-          ticketTypeIds.includes(order.ticket_type_id)
-        );
-        const orderIds = eventOrders.map((order) => order.id);
+      const data = await response.json();
 
-        if (orderIds.length > 0) {
-          const { error: ticketsDeleteError } = await supabase
-            .from("tickets")
-            .delete()
-            .in("order_id", orderIds);
-
-          if (ticketsDeleteError) {
-            alert(ticketsDeleteError.message);
-            return;
-          }
-        }
-
-        const { error: ordersDeleteError } = await supabase
-          .from("orders")
-          .delete()
-          .in("ticket_type_id", ticketTypeIds);
-
-        if (ordersDeleteError) {
-          alert(ordersDeleteError.message);
-          return;
-        }
-
-        const { error: ticketTypesDeleteError } = await supabase
-          .from("ticket_types")
-          .delete()
-          .in("id", ticketTypeIds);
-
-        if (ticketTypesDeleteError) {
-          alert(ticketTypesDeleteError.message);
-          return;
-        }
-      }
-
-      const { error: eventDeleteError } = await supabase
-        .from("events")
-        .delete()
-        .eq("id", eventId);
-
-      if (eventDeleteError) {
-        alert(eventDeleteError.message);
+      if (!response.ok) {
+        alert(data.error || "Failed to delete event");
         return;
       }
 
-      setEvents((prev) => prev.filter((event) => event.id !== eventId));
-      setTicketTypes((prev) => prev.filter((ticket) => ticket.event_id !== eventId));
+      const deletedTicketTypeIds = new Set(
+        ticketTypes
+          .filter((ticket) => ticket.event_id === eventId)
+          .map((ticket) => ticket.id)
+      );
 
-      const deletedTicketTypeIds = new Set(ticketTypeIds);
+      setEvents((prev) => prev.filter((event) => event.id !== eventId));
+      setTicketTypes((prev) =>
+        prev.filter((ticket) => ticket.event_id !== eventId)
+      );
       setOrders((prev) =>
         prev.filter((order) => !deletedTicketTypeIds.has(order.ticket_type_id))
       );
