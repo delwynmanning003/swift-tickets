@@ -187,7 +187,7 @@ export default function HomePage() {
 
         <header className="relative z-30 px-4 py-4 md:px-10">
           <div className="flex items-center justify-between gap-4">
-            <Link href="/" className="flex items-center shrink-0">
+            <Link href="/" className="flex shrink-0 items-center">
               <Image
                 src="/logo.svg"
                 alt="Swift Tickets"
@@ -346,8 +346,11 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 md:hidden">
-            <button className="flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10">
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Link
+              href="/categories"
+              className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+            >
               <span>Explore</span>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -363,61 +366,49 @@ export default function HomePage() {
                   d="m6 9 6 6 6-6"
                 />
               </svg>
-            </button>
+            </Link>
 
             <Link
               href="/create-event"
-              className="flex items-center justify-center rounded-[18px] bg-white px-3 py-3 text-center text-[11px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90"
+              className="shrink-0 flex items-center justify-center rounded-[18px] bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90"
             >
               Create Event
             </Link>
 
             <Link
               href="/sell"
-              className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10 sm:col-span-1"
+              className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
             >
-              Sell Ticket
+              Sell My Ticket
             </Link>
 
-            <div className="flex items-center justify-center">
-              <button className="flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-3 text-white transition hover:bg-white/10">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="h-5 w-5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M20 21a8 8 0 0 0-16 0"
-                  />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="h-3.5 w-3.5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="m6 9 6 6 6-6"
-                  />
-                </svg>
-              </button>
-            </div>
+            <Link
+              href="/login"
+              className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+            >
+              <span>Login</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-4 w-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M20 21a8 8 0 0 0-16 0"
+                />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </Link>
           </div>
         </header>
 
-        <div className="relative z-20 flex min-h-[68vh] flex-col items-center justify-start px-4 pt-10 text-center sm:px-6 sm:pt-14 md:min-h-[70vh] md:px-6 md:pt-16">
+        <div className="relative z-20 flex min-h-[58vh] flex-col items-center justify-start px-4 pt-10 text-center sm:px-6 sm:pt-12 md:min-h-[64vh] md:px-6 md:pt-16">
           <h1 className="max-w-[320px] text-[48px] font-extrabold leading-[0.9] tracking-tight sm:max-w-[540px] sm:text-[64px] md:max-w-5xl md:text-[72px] lg:text-[86px]">
-            Where the world meets 
+            Where the world meets
           </h1>
 
           <p className="mt-3 max-w-[320px] text-[10px] uppercase tracking-[0.28em] text-white/80 sm:max-w-none sm:text-[11px] md:mt-2 md:text-[13px]">
@@ -476,7 +467,7 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-0 z-10 h-24 w-full bg-gradient-to-b from-transparent via-black/70 to-black" />
       </section>
 
-      <div className="relative z-20 mx-auto max-w-[1300px] -mt-16 px-4 pt-4 pb-12 sm:-mt-20 sm:px-6 md:-mt-24">
+      <div className="relative z-20 mx-auto max-w-[1300px] -mt-8 px-4 pt-4 pb-12 sm:-mt-10 sm:px-6 md:-mt-16">
         <section className="mb-16">
           <div className="mb-6 flex items-center justify-between gap-4">
             <h2 className="text-[28px] font-bold tracking-tight md:text-[30px]">
