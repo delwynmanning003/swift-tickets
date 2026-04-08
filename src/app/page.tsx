@@ -163,7 +163,234 @@ export default function HomePage() {
   const trendingEvents = useMemo(() => events.slice(0, 4), [events]);
 
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen bg-black pt-[88px] text-white md:pt-[112px]">
+      <header
+        className={`fixed left-0 right-0 top-0 z-50 px-4 py-3 transition-all duration-300 backdrop-blur-2xl md:px-10 ${
+          scrolled
+            ? "bg-black/50 shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
+            : "bg-transparent"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-4">
+          <Link href="/" className="flex shrink-0 items-center">
+            <Image
+              src="/logo.svg"
+              alt="Swift Tickets"
+              width={420}
+              height={140}
+              className="h-12 w-auto object-contain sm:h-14 md:h-24"
+              priority
+            />
+          </Link>
+
+          <div className="hidden items-center gap-2 md:flex md:gap-4">
+            <div className="group relative">
+              <button className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10 md:text-[14px]">
+                <span>Explore</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-4 w-4 transition-transform duration-300 ease-out group-hover:rotate-180"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m6 9 6 6 6-6"
+                  />
+                </svg>
+              </button>
+
+              <div className="invisible absolute right-0 top-full mt-3 w-[280px] translate-y-2 opacity-0 transition-all duration-300 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                <div className="rounded-sm border border-white/10 bg-black/95 p-3 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                      South Africa
+                    </h3>
+
+                    <Link
+                      href="/categories"
+                      className="text-[11px] text-white/70 transition hover:text-white hover:underline underline-offset-4"
+                    >
+                      View all
+                    </Link>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    {categories.map((cat) => (
+                      <Link
+                        key={cat.name}
+                        href="/categories"
+                        className="group/item flex items-center justify-between rounded-sm border border-white/10 bg-white/[0.03] px-2.5 py-1.5 transition hover:border-white/20 hover:bg-white/[0.06]"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="relative h-[40px] w-[40px] overflow-hidden rounded-sm">
+                            <Image
+                              src={cat.image}
+                              alt={cat.name}
+                              fill
+                              className="object-cover transition duration-300 group-hover/item:scale-110"
+                            />
+                          </div>
+
+                          <span className="text-[16px] font-medium text-white">
+                            {cat.name}
+                          </span>
+                        </div>
+
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          className="h-4 w-4 text-white/60 transition group-hover/item:translate-x-0.5 group-hover/item:text-white"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 12h14m-6-6 6 6-6 6"
+                          />
+                        </svg>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Link
+              href="/create-event"
+              className="rounded-[16px] bg-white px-5 py-2.5 text-[14px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90 md:px-6 md:py-3 md:text-[15px]"
+            >
+              Create Event
+            </Link>
+
+            <Link
+              href="/sell"
+              className="rounded-full px-3 py-1.5 text-[13px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10 md:text-[14px]"
+            >
+              Sell My Ticket
+            </Link>
+
+            <div className="group relative">
+              <button className="flex items-center gap-2 rounded-full px-2 py-2 text-white transition hover:bg-white/10">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-7 w-7 md:h-8 md:w-8"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M20 21a8 8 0 0 0-16 0"
+                  />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-4 w-4 transition-transform duration-300 ease-out group-hover:rotate-180"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m6 9 6 6 6-6"
+                  />
+                </svg>
+              </button>
+
+              <div className="invisible absolute right-0 top-full mt-3 w-[200px] translate-y-2 opacity-0 transition-all duration-300 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                <div className="rounded-sm border border-white/10 bg-black/95 p-2 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                  <div className="flex flex-col gap-1">
+                    <Link
+                      href="/login"
+                      className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
+                    >
+                      Log in
+                    </Link>
+                    <Link
+                      href="/signup"
+                      className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
+                    >
+                      Sign up
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Link
+            href="/categories"
+            className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+          >
+            <span>Explore</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="h-3.5 w-3.5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m6 9 6 6 6-6"
+              />
+            </svg>
+          </Link>
+
+          <Link
+            href="/create-event"
+            className="shrink-0 flex items-center justify-center rounded-[18px] bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90"
+          >
+            Create Event
+          </Link>
+
+          <Link
+            href="/sell"
+            className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+          >
+            Sell My Ticket
+          </Link>
+
+          <Link
+            href="/login"
+            className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+          >
+            <span>Login</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="h-4 w-4"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M20 21a8 8 0 0 0-16 0"
+              />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </Link>
+        </div>
+      </header>
+
       <section className="relative min-h-screen w-full overflow-hidden bg-black">
         <div className="absolute inset-0 bg-black" />
 
@@ -196,234 +423,7 @@ export default function HomePage() {
         <div className="absolute right-[-18%] bottom-[2%] z-10 h-[340px] w-[340px] rounded-full bg-orange-500/25 blur-3xl md:right-[-10%] md:h-[520px] md:w-[520px]" />
         <div className="absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(2,132,199,0.08)_0%,rgba(0,0,0,0)_30%,rgba(234,88,12,0.10)_100%)]" />
 
-        <header
-          className={`sticky top-0 z-50 px-4 py-3 transition-all duration-300 backdrop-blur-2xl md:px-10 ${
-            scrolled
-              ? "bg-black/50 shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
-              : "bg-transparent"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-4">
-            <Link href="/" className="flex shrink-0 items-center">
-              <Image
-                src="/logo.svg"
-                alt="Swift Tickets"
-                width={420}
-                height={140}
-                className="h-12 w-auto object-contain sm:h-14 md:h-24"
-                priority
-              />
-            </Link>
-
-            <div className="hidden items-center gap-2 md:flex md:gap-4">
-              <div className="group relative">
-                <button className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10 md:text-[14px]">
-                  <span>Explore</span>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="h-4 w-4 transition-transform duration-300 ease-out group-hover:rotate-180"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m6 9 6 6 6-6"
-                    />
-                  </svg>
-                </button>
-
-                <div className="invisible absolute right-0 top-full mt-3 w-[280px] translate-y-2 opacity-0 transition-all duration-300 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-                  <div className="rounded-sm border border-white/10 bg-black/95 p-3 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                        South Africa
-                      </h3>
-
-                      <Link
-                        href="/categories"
-                        className="text-[11px] text-white/70 transition hover:text-white hover:underline underline-offset-4"
-                      >
-                        View all
-                      </Link>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      {categories.map((cat) => (
-                        <Link
-                          key={cat.name}
-                          href="/categories"
-                          className="group/item flex items-center justify-between rounded-sm border border-white/10 bg-white/[0.03] px-2.5 py-1.5 transition hover:border-white/20 hover:bg-white/[0.06]"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="relative h-[40px] w-[40px] overflow-hidden rounded-sm">
-                              <Image
-                                src={cat.image}
-                                alt={cat.name}
-                                fill
-                                className="object-cover transition duration-300 group-hover/item:scale-110"
-                              />
-                            </div>
-
-                            <span className="text-[16px] font-medium text-white">
-                              {cat.name}
-                            </span>
-                          </div>
-
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            className="h-4 w-4 text-white/60 transition group-hover/item:translate-x-0.5 group-hover/item:text-white"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M5 12h14m-6-6 6 6-6 6"
-                            />
-                          </svg>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Link
-                href="/create-event"
-                className="rounded-[16px] bg-white px-5 py-2.5 text-[14px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90 md:px-6 md:py-3 md:text-[15px]"
-              >
-                Create Event
-              </Link>
-
-              <Link
-                href="/sell"
-                className="rounded-full px-3 py-1.5 text-[13px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10 md:text-[14px]"
-              >
-                Sell My Ticket
-              </Link>
-
-              <div className="group relative">
-                <button className="flex items-center gap-2 rounded-full px-2 py-2 text-white transition hover:bg-white/10">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="h-7 w-7 md:h-8 md:w-8"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M20 21a8 8 0 0 0-16 0"
-                    />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="h-4 w-4 transition-transform duration-300 ease-out group-hover:rotate-180"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m6 9 6 6 6-6"
-                    />
-                  </svg>
-                </button>
-
-                <div className="invisible absolute right-0 top-full mt-3 w-[200px] translate-y-2 opacity-0 transition-all duration-300 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-                  <div className="rounded-sm border border-white/10 bg-black/95 p-2 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-                    <div className="flex flex-col gap-1">
-                      <Link
-                        href="/login"
-                        className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
-                      >
-                        Log in
-                      </Link>
-                      <Link
-                        href="/signup"
-                        className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
-                      >
-                        Sign up
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <Link
-              href="/categories"
-              className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-            >
-              <span>Explore</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-3.5 w-3.5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="m6 9 6 6 6-6"
-                />
-              </svg>
-            </Link>
-
-            <Link
-              href="/create-event"
-              className="shrink-0 flex items-center justify-center rounded-[18px] bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90"
-            >
-              Create Event
-            </Link>
-
-            <Link
-              href="/sell"
-              className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-            >
-              Sell My Ticket
-            </Link>
-
-            <Link
-              href="/login"
-              className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-            >
-              <span>Login</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M20 21a8 8 0 0 0-16 0"
-                />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </Link>
-          </div>
-        </header>
-
-        <div className="relative z-20 flex min-h-[58vh] flex-col items-center justify-start px-4 pt-10 text-center sm:px-6 sm:pt-12 md:min-h-[64vh] md:px-6 md:pt-16">
+        <div className="relative z-20 flex min-h-[58vh] flex-col items-center justify-start px-4 pt-4 text-center sm:px-6 sm:pt-6 md:min-h-[64vh] md:px-6 md:pt-10">
           <h1 className="max-w-[320px] text-[48px] font-extrabold leading-[0.9] tracking-tight sm:max-w-[540px] sm:text-[64px] md:max-w-5xl md:text-[72px] lg:text-[86px]">
             Where the world meets
           </h1>
