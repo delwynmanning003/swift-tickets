@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +15,7 @@ function PaymentSuccessContent() {
   const [message, setMessage] = useState("Verifying your payment...");
 
   useEffect(() => {
-    const verifyAndFinalize = async () => {
+    const verifyPayment = async () => {
       if (!reference) {
         setStatus("missing");
         setMessage("Missing payment reference.");
@@ -24,102 +23,20 @@ function PaymentSuccessContent() {
       }
 
       try {
-        const verifyRes = await fetch("/api/paystack/verify", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ reference }),
-        });
+        const verifyRes = await fetch(
+          `/api/paystack/verify?reference=${encodeURIComponent(reference)}`
+        );
 
         const verifyData = await verifyRes.json();
 
         if (!verifyRes.ok || !verifyData?.success) {
           setStatus("failed");
-          setMessage(verifyData?.message || "Payment verification failed.");
-          return;
-        }
-
-        const { data: order, error: orderError } = await supabase
-          .from("orders")
-          .select("*")
-          .eq("reference", reference)
-          .single();
-
-        if (orderError || !order) {
-          setStatus("failed");
-          setMessage("Order not found.");
-          return;
-        }
-
-        if (order.status === "paid") {
-          setStatus("success");
-          setMessage("Payment confirmed. Your ticket purchase is complete.");
-          return;
-        }
-
-        const { data: ticketType, error: ticketTypeError } = await supabase
-          .from("ticket_types")
-          .select("*")
-          .eq("id", order.ticket_type_id)
-          .single();
-
-        if (ticketTypeError || !ticketType) {
-          setStatus("failed");
-          setMessage("Ticket type not found.");
-          return;
-        }
-
-        if (Number(ticketType.quantity) < Number(order.quantity)) {
-          setStatus("failed");
-          setMessage("Not enough tickets available to complete this order.");
-          return;
-        }
-
-        const ticketRows = Array.from({ length: order.quantity }).map(() => ({
-          order_id: order.id,
-          ticket_type_id: order.ticket_type_id,
-          qr_code: crypto.randomUUID(),
-          checked_in: false,
-        }));
-
-        const { error: insertTicketsError } = await supabase
-          .from("tickets")
-          .insert(ticketRows);
-
-        if (insertTicketsError) {
-          setStatus("failed");
-          setMessage(insertTicketsError.message);
-          return;
-        }
-
-        const newRemainingQuantity =
-          Number(ticketType.quantity) - Number(order.quantity);
-
-        const { error: updateQuantityError } = await supabase
-          .from("ticket_types")
-          .update({ quantity: newRemainingQuantity })
-          .eq("id", order.ticket_type_id);
-
-        if (updateQuantityError) {
-          setStatus("failed");
-          setMessage(updateQuantityError.message);
-          return;
-        }
-
-        const { error: updateOrderError } = await supabase
-          .from("orders")
-          .update({ status: "paid" })
-          .eq("id", order.id);
-
-        if (updateOrderError) {
-          setStatus("failed");
-          setMessage(updateOrderError.message);
+          setMessage(verifyData?.error || "Payment verification failed.");
           return;
         }
 
         setStatus("success");
-        setMessage("Payment confirmed. Your tickets have been created.");
+        setMessage("Payment confirmed. Your order has been marked as paid.");
       } catch (error) {
         console.error(error);
         setStatus("failed");
@@ -127,7 +44,7 @@ function PaymentSuccessContent() {
       }
     };
 
-    verifyAndFinalize();
+    verifyPayment();
   }, [reference]);
 
   return (
