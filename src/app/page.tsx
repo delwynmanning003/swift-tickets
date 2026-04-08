@@ -163,7 +163,7 @@ export default function HomePage() {
   const trendingEvents = useMemo(() => events.slice(0, 4), [events]);
 
   return (
-    <main className="min-h-screen bg-black pt-[126px] text-white sm:pt-[132px] md:pt-[112px]">
+    <main className="min-h-screen bg-black text-white">
       <header
         className={`fixed left-0 right-0 top-0 z-50 px-4 py-3 transition-all duration-300 md:px-10 ${
           scrolled
@@ -423,7 +423,7 @@ export default function HomePage() {
         <div className="absolute right-[-18%] bottom-[2%] z-10 h-[340px] w-[340px] rounded-full bg-orange-500/25 blur-3xl md:right-[-10%] md:h-[520px] md:w-[520px]" />
         <div className="absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(2,132,199,0.08)_0%,rgba(0,0,0,0)_30%,rgba(234,88,12,0.10)_100%)]" />
 
-        <div className="relative z-20 flex min-h-[58vh] flex-col items-center justify-start px-4 pt-4 text-center sm:px-6 sm:pt-6 md:min-h-[64vh] md:px-6 md:pt-10">
+        <div className="relative z-20 flex min-h-[58vh] flex-col items-center justify-start px-4 pt-[120px] text-center sm:px-6 sm:pt-[132px] md:min-h-[64vh] md:px-6 md:pt-[150px]">
           <h1 className="max-w-[320px] text-[48px] font-extrabold leading-[0.9] tracking-tight sm:max-w-[540px] sm:text-[64px] md:max-w-5xl md:text-[72px] lg:text-[86px]">
             Where the world meets
           </h1>
