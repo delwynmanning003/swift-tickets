@@ -207,6 +207,19 @@ export default function CheckoutPage() {
         return;
       }
 
+      if (data.reference) {
+        const { error: updateError } = await supabase
+          .from("orders")
+          .update({
+            reference: data.reference,
+          })
+          .eq("id", order.id);
+
+        if (updateError) {
+          console.error("Failed to save payment reference:", updateError);
+        }
+      }
+
       window.location.href = data.url;
     } catch (error) {
       console.error("Payment error:", error);
@@ -304,7 +317,9 @@ export default function CheckoutPage() {
                     min={1}
                     max={ticket.quantity}
                     value={quantity}
-                    onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
+                    onChange={(e) =>
+                      setQuantity(Math.max(1, Number(e.target.value) || 1))
+                    }
                     className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none focus:border-white/60"
                   />
                 </div>
@@ -323,18 +338,24 @@ export default function CheckoutPage() {
 
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/65">Price per ticket</span>
-                <span className="font-medium">R{Number(ticket.price).toFixed(2)}</span>
+                <span className="font-medium">
+                  R{Number(ticket.price).toFixed(2)}
+                </span>
               </div>
 
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/65">Subtotal</span>
-                <span className="font-medium">R{amounts.baseAmount.toFixed(2)}</span>
+                <span className="font-medium">
+                  R{amounts.baseAmount.toFixed(2)}
+                </span>
               </div>
 
               {serviceFee > 0 && (
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-white/65">Service Fee</span>
-                  <span className="font-medium">R{serviceFee.toFixed(2)}</span>
+                  <span className="font-medium">
+                    R{serviceFee.toFixed(2)}
+                  </span>
                 </div>
               )}
 
@@ -352,7 +373,9 @@ export default function CheckoutPage() {
                 disabled={paying}
                 className="mt-6 w-full bg-white px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {paying ? "Redirecting..." : `Pay R${amounts.buyerTotal.toFixed(2)}`}
+                {paying
+                  ? "Redirecting..."
+                  : `Pay R${amounts.buyerTotal.toFixed(2)}`}
               </button>
             )}
           </div>
