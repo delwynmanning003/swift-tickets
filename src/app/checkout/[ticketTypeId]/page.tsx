@@ -74,9 +74,7 @@ export default function CheckoutPage() {
       }
     };
 
-    if (ticketTypeId) {
-      loadData();
-    }
+    if (ticketTypeId) loadData();
   }, [ticketTypeId]);
 
   const amounts = useMemo(() => {
@@ -122,6 +120,7 @@ export default function CheckoutPage() {
   }, [ticket, eventData, quantity]);
 
   const serviceFee = Math.max(amounts.buyerTotal - amounts.baseAmount, 0);
+  const isFreeTicket = amounts.buyerTotal === 0;
 
   const handlePay = async () => {
     if (!ticket || !eventData) {
@@ -152,7 +151,9 @@ export default function CheckoutPage() {
     try {
       setPaying(true);
 
-      const reference = `swift_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+      const reference = `${
+        isFreeTicket ? "free" : "swift"
+      }_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 
       const { data: order, error: orderError } = await supabase
         .from("orders")
@@ -164,8 +165,8 @@ export default function CheckoutPage() {
             quantity,
             status: "pending",
             base_amount: amounts.baseAmount,
-            fixed_fee: amounts.fixedFee,
-            percentage_fee: amounts.percentageFee,
+            fixed_fee: isFreeTicket ? 0 : amounts.fixedFee,
+            percentage_fee: isFreeTicket ? 0 : amounts.percentageFee,
             buyer_total: amounts.buyerTotal,
             organizer_payout: amounts.organizerPayout,
             reference,
@@ -174,9 +175,16 @@ export default function CheckoutPage() {
         .select()
         .single();
 
-      if (orderError) {
+      if (orderError || !order) {
         console.error("Order creation error:", orderError);
-        alert(orderError.message);
+        alert(orderError?.message || "Failed to create order");
+        return;
+      }
+
+      if (isFreeTicket) {
+        window.location.href = `/payment-success?reference=${encodeURIComponent(
+          reference
+        )}`;
         return;
       }
 
@@ -210,9 +218,7 @@ export default function CheckoutPage() {
       if (data.reference) {
         const { error: updateError } = await supabase
           .from("orders")
-          .update({
-            reference: data.reference,
-          })
+          .update({ reference: data.reference })
           .eq("id", order.id);
 
         if (updateError) {
@@ -222,11 +228,11 @@ export default function CheckoutPage() {
 
       window.location.href = data.url;
     } catch (error) {
-      console.error("Payment error:", error);
+      console.error("Checkout error:", error);
       alert(
         error instanceof Error
           ? error.message
-          : "Something went wrong while starting payment"
+          : "Something went wrong while starting checkout"
       );
     } finally {
       setPaying(false);
@@ -375,6 +381,8 @@ export default function CheckoutPage() {
               >
                 {paying
                   ? "Redirecting..."
+                  : isFreeTicket
+                  ? "Get Free Ticket"
                   : `Pay R${amounts.buyerTotal.toFixed(2)}`}
               </button>
             )}
