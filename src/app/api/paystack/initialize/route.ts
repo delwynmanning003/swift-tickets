@@ -1,19 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-export async function GET(req: Request) {
+export async function POST(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const reference = searchParams.get("reference");
+    const body = await req.json();
+    const { email, amount, orderId, fullName } = body;
 
-    if (!reference) {
+    if (!email || !amount || !orderId) {
       return NextResponse.json(
-        { error: "Missing payment reference" },
+        { error: "Missing required payment fields" },
         { status: 400 }
       );
     }
@@ -25,14 +19,30 @@ export async function GET(req: Request) {
       );
     }
 
+    if (!process.env.NEXT_PUBLIC_SITE_URL) {
+      return NextResponse.json(
+        { error: "Missing NEXT_PUBLIC_SITE_URL" },
+        { status: 500 }
+      );
+    }
+
     const paystackRes = await fetch(
-      `https://api.paystack.co/transaction/verify/${reference}`,
+      "https://api.paystack.co/transaction/initialize",
       {
-        method: "GET",
+        method: "POST",
         headers: {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          email,
+          amount: Math.round(Number(amount) * 100),
+          callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success`,
+          metadata: {
+            orderId,
+            fullName,
+          },
+        }),
       }
     );
 
@@ -40,52 +50,14 @@ export async function GET(req: Request) {
 
     if (!paystackRes.ok || !paystackData.status) {
       return NextResponse.json(
-        { error: paystackData.message || "Failed to verify payment" },
-        { status: 400 }
-      );
-    }
-
-    const payment = paystackData.data;
-
-    if (payment.status !== "success") {
-      return NextResponse.json(
-        { error: "Payment not successful" },
-        { status: 400 }
-      );
-    }
-
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("reference", reference)
-      .single();
-
-    if (orderError || !order) {
-      return NextResponse.json(
-        { error: "Order not found for this payment reference" },
-        { status: 404 }
-      );
-    }
-
-    const { error: updateOrderError } = await supabase
-      .from("orders")
-      .update({
-        status: "paid",
-      })
-      .eq("id", order.id);
-
-    if (updateOrderError) {
-      return NextResponse.json(
-        { error: updateOrderError.message },
+        { error: paystackData.message || "Failed to initialize payment" },
         { status: 400 }
       );
     }
 
     return NextResponse.json({
-      success: true,
-      message: "Payment verified successfully",
-      orderId: order.id,
-      reference,
+      url: paystackData.data.authorization_url,
+      reference: paystackData.data.reference,
     });
   } catch (error) {
     return NextResponse.json(
