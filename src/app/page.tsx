@@ -46,6 +46,8 @@ export default function HomePage() {
   const [isSuggestionVisible, setIsSuggestionVisible] = useState(false);
 
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -149,6 +151,15 @@ export default function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 40);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const trendingEvents = useMemo(() => events.slice(0, 4), [events]);
 
   return (
@@ -185,7 +196,13 @@ export default function HomePage() {
         <div className="absolute right-[-18%] bottom-[2%] z-10 h-[340px] w-[340px] rounded-full bg-orange-500/25 blur-3xl md:right-[-10%] md:h-[520px] md:w-[520px]" />
         <div className="absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(2,132,199,0.08)_0%,rgba(0,0,0,0)_30%,rgba(234,88,12,0.10)_100%)]" />
 
-        <header className="sticky top-0 z-50 border-b border-white/10 bg-black/35 px-4 py-3 backdrop-blur-xl md:px-10">
+        <header
+          className={`sticky top-0 z-50 px-4 py-3 transition-all duration-300 backdrop-blur-2xl md:px-10 ${
+            scrolled
+              ? "bg-black/50 shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
+              : "bg-transparent"
+          }`}
+        >
           <div className="flex items-center justify-between gap-4">
             <Link href="/" className="flex shrink-0 items-center">
               <Image
