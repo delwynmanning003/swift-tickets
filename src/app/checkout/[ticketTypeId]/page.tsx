@@ -4,6 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+type TicketType = {
+  id: string;
+  event_id: string;
+  name: string;
+  price: number;
+  quantity: number;
+};
+
+type EventType = {
+  id: string;
+  title?: string;
+  location?: string;
+  event_date?: string;
+  fee_option?: "split" | "organizer_pays_all" | "buyer_pays_all" | null;
+};
+
 export default function CheckoutPage() {
   const params = useParams();
   const ticketTypeId = params.ticketTypeId as string;
@@ -11,39 +27,56 @@ export default function CheckoutPage() {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [ticket, setTicket] = useState<any>(null);
-  const [eventData, setEventData] = useState<any>(null);
+
+  const [ticket, setTicket] = useState<TicketType | null>(null);
+  const [eventData, setEventData] = useState<EventType | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      const { data: ticketData } = await supabase
-        .from("ticket_types")
-        .select("*")
-        .eq("id", ticketTypeId)
-        .single();
+        const { data: ticketData, error: ticketError } = await supabase
+          .from("ticket_types")
+          .select("*")
+          .eq("id", ticketTypeId)
+          .single();
 
-      if (!ticketData) {
+        if (ticketError || !ticketData) {
+          console.error("Ticket load error:", ticketError);
+          setTicket(null);
+          setEventData(null);
+          return;
+        }
+
+        setTicket(ticketData);
+
+        const { data: eventRow, error: eventError } = await supabase
+          .from("events")
+          .select("*")
+          .eq("id", ticketData.event_id)
+          .single();
+
+        if (eventError) {
+          console.error("Event load error:", eventError);
+        }
+
+        setEventData(eventRow ?? null);
+      } catch (error) {
+        console.error("Unexpected load error:", error);
+        setTicket(null);
+        setEventData(null);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setTicket(ticketData);
-
-      const { data: eventRow } = await supabase
-        .from("events")
-        .select("*")
-        .eq("id", ticketData.event_id)
-        .single();
-
-      setEventData(eventRow);
-      setLoading(false);
     };
 
-    if (ticketTypeId) loadData();
+    if (ticketTypeId) {
+      loadData();
+    }
   }, [ticketTypeId]);
 
   const amounts = useMemo(() => {
@@ -142,6 +175,7 @@ export default function CheckoutPage() {
         .single();
 
       if (orderError) {
+        console.error("Order creation error:", orderError);
         alert(orderError.message);
         return;
       }
@@ -153,29 +187,34 @@ export default function CheckoutPage() {
         },
         body: JSON.stringify({
           email: buyerEmail.trim(),
+          fullName: buyerName.trim(),
           amount: amounts.buyerTotal,
-          reference,
-          metadata: {
-            order_id: order.id,
-            ticket_type_id: ticketTypeId,
-            quantity,
-            buyer_name: buyerName.trim(),
-            buyer_email: buyerEmail.trim(),
-          },
+          orderId: order.id,
         }),
       });
 
       const data = await response.json();
 
-      if (!response.ok || !data?.status || !data?.data?.authorization_url) {
-        alert(data?.message || "Failed to initialize payment");
+      if (!response.ok) {
+        console.error("Initialize payment error:", data);
+        alert(data.error || "Failed to initialize payment");
         return;
       }
 
-      window.location.href = data.data.authorization_url;
+      if (!data.url) {
+        console.error("No payment URL returned:", data);
+        alert("No payment URL returned");
+        return;
+      }
+
+      window.location.href = data.url;
     } catch (error) {
-      console.error(error);
-      alert("Something went wrong while starting payment");
+      console.error("Payment error:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while starting payment"
+      );
     } finally {
       setPaying(false);
     }
@@ -183,18 +222,22 @@ export default function CheckoutPage() {
 
   if (loading) {
     return (
-      <main style={{ padding: 40 }}>
-        <h1>Checkout</h1>
-        <p>Loading...</p>
+      <main className="min-h-screen bg-black px-6 py-10 text-white">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="mb-4 text-3xl font-bold">Checkout</h1>
+          <p className="text-white/70">Loading...</p>
+        </div>
       </main>
     );
   }
 
   if (!ticket) {
     return (
-      <main style={{ padding: 40 }}>
-        <h1>Checkout</h1>
-        <p>Ticket not found.</p>
+      <main className="min-h-screen bg-black px-6 py-10 text-white">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="mb-4 text-3xl font-bold">Checkout</h1>
+          <p className="text-white/70">Ticket not found.</p>
+        </div>
       </main>
     );
   }
@@ -202,73 +245,119 @@ export default function CheckoutPage() {
   const soldOut = Number(ticket.quantity) <= 0;
 
   return (
-    <main style={{ padding: 40, maxWidth: 700 }}>
-      <h1>Checkout</h1>
-
-      <p>
-        <strong>Ticket:</strong> {ticket.name}
-      </p>
-      <p>
-        <strong>Price per ticket:</strong> R{Number(ticket.price).toFixed(2)}
-      </p>
-
-      <br />
-
-      {soldOut ? (
-        <div>
-          <p>
-            <strong>Sold Out</strong>
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto max-w-3xl px-6 py-10">
+        <div className="mb-8 border border-white/10 bg-white/[0.03] p-6">
+          <p className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
+            Swift Tickets
           </p>
+          <h1 className="text-4xl font-extrabold tracking-[-0.03em]">
+            Checkout
+          </h1>
+          {eventData?.title && (
+            <p className="mt-3 text-lg text-white/75">{eventData.title}</p>
+          )}
         </div>
-      ) : (
-        <>
-          <input
-            placeholder="Full Name"
-            value={buyerName}
-            onChange={(e) => setBuyerName(e.target.value)}
-          />
-          <br />
-          <br />
 
-          <input
-            placeholder="Email Address"
-            value={buyerEmail}
-            onChange={(e) => setBuyerEmail(e.target.value)}
-          />
-          <br />
-          <br />
+        <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+          <div className="border border-white/10 bg-white/[0.03] p-6">
+            <h2 className="mb-5 text-2xl font-bold">Buyer Details</h2>
 
-          <input
-            type="number"
-            min={1}
-            max={ticket.quantity}
-            value={quantity}
-            onChange={(e) => setQuantity(Number(e.target.value))}
-          />
-          <br />
-          <br />
+            {soldOut ? (
+              <div className="rounded-none border border-red-500/40 bg-red-500/10 p-4">
+                <p className="font-semibold text-red-300">Sold Out</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter your full name"
+                    value={buyerName}
+                    onChange={(e) => setBuyerName(e.target.value)}
+                    className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none placeholder:text-white/30 focus:border-white/60"
+                  />
+                </div>
 
-          <div style={{ marginBottom: 24 }}>
-            <p>
-              <strong>Ticket Subtotal:</strong> R{amounts.baseAmount.toFixed(2)}
-            </p>
+                <div className="mb-4">
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="Enter your email address"
+                    value={buyerEmail}
+                    onChange={(e) => setBuyerEmail(e.target.value)}
+                    className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none placeholder:text-white/30 focus:border-white/60"
+                  />
+                </div>
 
-            {serviceFee > 0 && (
-              <p>
-                <strong>Service Fee:</strong> R{serviceFee.toFixed(2)}
-              </p>
+                <div className="mb-2">
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={ticket.quantity}
+                    value={quantity}
+                    onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
+                    className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none focus:border-white/60"
+                  />
+                </div>
+              </>
             )}
-
-            <p>
-              <strong>Total Due:</strong> R{amounts.buyerTotal.toFixed(2)}
-            </p>
           </div>
 
-          <button onClick={handlePay} disabled={paying}>
-            {paying ? "Redirecting..." : `Pay R${amounts.buyerTotal.toFixed(2)}`}
-          </button>
-        </>
-      )}
+          <div className="border border-white/10 bg-white/[0.03] p-6">
+            <h2 className="mb-5 text-2xl font-bold">Order Summary</h2>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-white/65">Ticket</span>
+                <span className="text-right font-medium">{ticket.name}</span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-white/65">Price per ticket</span>
+                <span className="font-medium">R{Number(ticket.price).toFixed(2)}</span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-white/65">Subtotal</span>
+                <span className="font-medium">R{amounts.baseAmount.toFixed(2)}</span>
+              </div>
+
+              {serviceFee > 0 && (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-white/65">Service Fee</span>
+                  <span className="font-medium">R{serviceFee.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="border-t border-white/10 pt-3">
+                <div className="flex items-center justify-between gap-4 text-base font-bold">
+                  <span>Total Due</span>
+                  <span>R{amounts.buyerTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {!soldOut && (
+              <button
+                onClick={handlePay}
+                disabled={paying}
+                className="mt-6 w-full bg-white px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {paying ? "Redirecting..." : `Pay R${amounts.buyerTotal.toFixed(2)}`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </main>
   );
 }
