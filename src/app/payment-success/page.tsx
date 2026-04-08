@@ -36,7 +36,7 @@ function PaymentSuccessContent() {
         }
 
         setStatus("success");
-        setMessage("Payment confirmed. Your order has been marked as paid.");
+        setMessage("Payment confirmed. Your tickets have been issued.");
       } catch (error) {
         console.error(error);
         setStatus("failed");
@@ -48,36 +48,12 @@ function PaymentSuccessContent() {
   }, [reference]);
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#000",
-        color: "white",
-        padding: 40,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily:
-          'ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", Arial, sans-serif',
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 640,
-          border: "1px solid rgba(255,255,255,0.12)",
-          background: "rgba(255,255,255,0.03)",
-          padding: 32,
-        }}
-      >
-        <h1
-          style={{
-            margin: "0 0 16px",
-            fontSize: 36,
-            fontWeight: 800,
-            letterSpacing: "-1px",
-          }}
-        >
+    <main className="min-h-screen bg-black px-6 py-10 text-white">
+      <div className="mx-auto max-w-2xl border border-white/10 bg-white/[0.03] p-8">
+        <p className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
+          Swift Tickets
+        </p>
+        <h1 className="mb-4 text-4xl font-extrabold tracking-[-0.03em]">
           {status === "verifying" && "Verifying Payment..."}
           {status === "success" && "Payment Successful 🎉"}
           {status === "failed" && "Payment Verification Failed"}
@@ -85,24 +61,19 @@ function PaymentSuccessContent() {
         </h1>
 
         <p
-          style={{
-            margin: "0 0 16px",
-            fontSize: 16,
-            color:
-              status === "success"
-                ? "#d1fae5"
-                : status === "failed" || status === "missing"
-                ? "#fecaca"
-                : "#e5e7eb",
-          }}
+          className={
+            status === "success"
+              ? "text-green-400"
+              : status === "failed" || status === "missing"
+              ? "text-red-400"
+              : "text-white/75"
+          }
         >
           {message}
         </p>
 
         {reference && (
-          <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>
-            Reference: {reference}
-          </p>
+          <p className="mt-4 text-sm text-white/50">Reference: {reference}</p>
         )}
       </div>
     </main>
@@ -111,7 +82,7 @@ function PaymentSuccessContent() {
 
 export default function PaymentSuccess() {
   return (
-    <Suspense fallback={<main style={{ padding: 40 }}>Loading...</main>}>
+    <Suspense fallback={<main className="p-10 text-white">Loading...</main>}>
       <PaymentSuccessContent />
     </Suspense>
   );
