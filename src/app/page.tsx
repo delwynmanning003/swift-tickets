@@ -163,12 +163,12 @@ export default function HomePage() {
   const trendingEvents = useMemo(() => events.slice(0, 4), [events]);
 
   return (
-    <main className="min-h-screen bg-black pt-[88px] text-white md:pt-[112px]">
+    <main className="min-h-screen bg-black pt-[126px] text-white sm:pt-[132px] md:pt-[112px]">
       <header
-        className={`fixed left-0 right-0 top-0 z-50 px-4 py-3 transition-all duration-300 backdrop-blur-2xl md:px-10 ${
+        className={`fixed left-0 right-0 top-0 z-50 px-4 py-3 transition-all duration-300 md:px-10 ${
           scrolled
-            ? "bg-black/50 shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
-            : "bg-transparent"
+            ? "backdrop-blur-2xl shadow-[0_10px_40px_rgba(0,0,0,0.18)]"
+            : ""
         }`}
       >
         <div className="flex items-center justify-between gap-4">
@@ -178,7 +178,7 @@ export default function HomePage() {
               alt="Swift Tickets"
               width={420}
               height={140}
-              className="h-12 w-auto object-contain sm:h-14 md:h-24"
+              className="h-10 w-auto object-contain sm:h-12 md:h-24"
               priority
             />
           </Link>
@@ -334,7 +334,7 @@ export default function HomePage() {
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Link
             href="/categories"
-            className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+            className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
           >
             <span>Explore</span>
             <svg
@@ -355,21 +355,21 @@ export default function HomePage() {
 
           <Link
             href="/create-event"
-            className="shrink-0 flex items-center justify-center rounded-[18px] bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90"
+            className="shrink-0 flex items-center justify-center rounded-[18px] bg-white px-4 py-2.5 text-[11px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90"
           >
             Create Event
           </Link>
 
           <Link
             href="/sell"
-            className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+            className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
           >
             Sell My Ticket
           </Link>
 
           <Link
             href="/login"
-            className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+            className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
           >
             <span>Login</span>
             <svg
