@@ -284,8 +284,8 @@ export default function HomePage() {
       <header
         className={`fixed left-0 right-0 top-0 z-50 px-4 py-3 transition-all duration-300 md:px-10 ${
           scrolled
-            ? "backdrop-blur-2xl shadow-[0_10px_40px_rgba(0,0,0,0.18)]"
-            : ""
+            ? "bg-black/40 backdrop-blur-2xl shadow-[0_10px_40px_rgba(0,0,0,0.18)]"
+            : "bg-transparent"
         }`}
       >
         <div className="flex items-center justify-between gap-4">
@@ -474,92 +474,6 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <Link
-            href="/categories"
-            className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-          >
-            <span>Explore</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="h-3.5 w-3.5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="m6 9 6 6 6-6"
-              />
-            </svg>
-          </Link>
-
-          <Link
-            href="/create-event"
-            className="shrink-0 flex items-center justify-center rounded-[18px] bg-white px-4 py-2.5 text-[11px] font-bold uppercase tracking-tight text-black transition hover:bg-white/90"
-          >
-            Create Event
-          </Link>
-
-          <Link
-            href="/sell"
-            className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-          >
-            Sell My Ticket
-          </Link>
-
-          {!checkingAuth && user ? (
-            <>
-              <Link
-                href="/dashboard"
-                className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-              >
-                Dashboard
-              </Link>
-
-              <Link
-                href="/my-tickets"
-                className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-              >
-                My Tickets
-              </Link>
-            </>
-          ) : !checkingAuth ? (
-            <Link
-              href="/login"
-              className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-            >
-              <span>Login</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M20 21a8 8 0 0 0-16 0"
-                />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </Link>
-          ) : null}
-
-          {!checkingAuth && user ? (
-            <button
-              onClick={handleLogout}
-              className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-            >
-              Log out
-            </button>
-          ) : null}
-        </div>
       </header>
 
       <section className="relative min-h-screen w-full overflow-hidden bg-black">
@@ -594,8 +508,8 @@ export default function HomePage() {
         <div className="absolute right-[-18%] bottom-[2%] z-10 h-[340px] w-[340px] rounded-full bg-orange-500/25 blur-3xl md:right-[-10%] md:h-[520px] md:w-[520px]" />
         <div className="absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(2,132,199,0.08)_0%,rgba(0,0,0,0)_30%,rgba(234,88,12,0.10)_100%)]" />
 
-        <div className="relative z-20 flex min-h-[58vh] flex-col items-center justify-start px-4 pt-[120px] text-center sm:px-6 sm:pt-[132px] md:min-h-[64vh] md:px-6 md:pt-[150px]">
-          <h1 className="max-w-[320px] text-[48px] font-extrabold leading-[0.9] tracking-tight sm:max-w-[540px] sm:text-[64px] md:max-w-5xl md:text-[72px] lg:text-[86px]">
+        <div className="relative z-20 flex min-h-[46vh] flex-col items-center justify-start px-4 pt-[92px] text-center sm:px-6 sm:pt-[110px] md:min-h-[64vh] md:px-6 md:pt-[150px]">
+          <h1 className="max-w-[300px] text-[42px] font-extrabold leading-[0.92] tracking-tight sm:max-w-[540px] sm:text-[64px] md:max-w-5xl md:text-[72px] lg:text-[86px]">
             Where the world meets
           </h1>
 
@@ -603,7 +517,7 @@ export default function HomePage() {
             For the people, by the people
           </p>
 
-          <div className="mt-6 w-full max-w-[780px] rounded-2xl bg-white p-3 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition hover:shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:rounded-xl sm:p-4 md:rounded-sm md:px-5 md:py-3">
+          <div className="mt-5 w-full max-w-[780px] rounded-2xl bg-white p-3 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition hover:shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:rounded-xl sm:p-4 md:rounded-sm md:px-5 md:py-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <span className="shrink-0 text-[20px]">⌕</span>
@@ -645,7 +559,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <button className="w-full rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-black/80 sm:w-auto sm:min-w-[120px] md:rounded-sm md:px-6 md:py-2.5">
+              <button className="w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black/80 sm:w-auto sm:min-w-[120px] md:rounded-sm md:px-6 md:py-2.5">
                 Search
               </button>
             </div>
@@ -655,7 +569,7 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-0 z-10 h-24 w-full bg-gradient-to-b from-transparent via-black/70 to-black" />
       </section>
 
-      <div className="relative z-20 mx-auto max-w-[1300px] -mt-8 px-4 pt-4 pb-12 sm:-mt-10 sm:px-6 md:-mt-16">
+      <div className="relative z-20 mx-auto max-w-[1300px] -mt-3 px-4 pt-2 pb-12 sm:-mt-10 sm:px-6 md:-mt-16">
         <section className="mb-20">
           <div className="mb-7 flex items-center justify-between gap-4">
             <h2 className="text-[28px] font-bold tracking-tight md:text-[30px]">
