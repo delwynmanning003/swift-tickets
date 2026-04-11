@@ -283,10 +283,10 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-black text-white">
       <header
-        className={`fixed left-0 right-0 top-0 z-50 px-4 py-3 transition-all duration-300 md:px-10 ${
+        className={`fixed left-0 right-0 top-0 z-50 border-b border-white/5 px-4 py-3 transition-all duration-300 md:px-10 ${
           scrolled
-            ? "bg-black/40 backdrop-blur-2xl shadow-[0_10px_40px_rgba(0,0,0,0.18)]"
-            : "bg-transparent"
+            ? "bg-black/55 backdrop-blur-2xl shadow-[0_10px_40px_rgba(0,0,0,0.18)]"
+            : "bg-black/30 backdrop-blur-md"
         }`}
       >
         <div className="hidden items-center justify-between gap-4 md:flex">
@@ -556,9 +556,9 @@ export default function HomePage() {
             <Image
               src="/logo.svg"
               alt="Swift Tickets"
-              width={180}
-              height={56}
-              className="h-12 w-auto object-contain"
+              width={240}
+              height={76}
+              className="h-16 w-auto object-contain"
               priority
             />
           </Link>
@@ -673,7 +673,7 @@ export default function HomePage() {
         <div className="absolute right-[-18%] bottom-[2%] z-10 h-[340px] w-[340px] rounded-full bg-orange-500/25 blur-3xl md:right-[-10%] md:h-[520px] md:w-[520px]" />
         <div className="absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(2,132,199,0.08)_0%,rgba(0,0,0,0)_30%,rgba(234,88,12,0.10)_100%)]" />
 
-        <div className="relative z-20 flex min-h-[46vh] flex-col items-center justify-start px-4 pt-[92px] text-center sm:px-6 sm:pt-[110px] md:min-h-[64vh] md:px-6 md:pt-[150px]">
+        <div className="relative z-20 flex min-h-[46vh] flex-col items-center justify-start px-4 pt-[108px] text-center sm:px-6 sm:pt-[118px] md:min-h-[64vh] md:px-6 md:pt-[150px]">
           <h1 className="max-w-[300px] text-[42px] font-extrabold leading-[0.92] tracking-tight sm:max-w-[540px] sm:text-[64px] md:max-w-5xl md:text-[72px] lg:text-[86px]">
             Where the world meets
           </h1>
