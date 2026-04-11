@@ -31,8 +31,45 @@ export default function CheckoutPage() {
   const [ticket, setTicket] = useState<TicketType | null>(null);
   const [eventData, setEventData] = useState<EventType | null>(null);
 
+  const [user, setUser] = useState<any>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        setUser(session.user);
+        setBuyerEmail(session.user.email || "");
+      } else {
+        setUser(null);
+      }
+
+      setCheckingAuth(false);
+    };
+
+    getUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        setBuyerEmail((current) => current || session.user.email || "");
+      } else {
+        setUser(null);
+      }
+
+      setCheckingAuth(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -128,6 +165,12 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!user) {
+      alert("Please log in to continue");
+      window.location.href = "/login";
+      return;
+    }
+
     if (!buyerName.trim()) {
       alert("Please enter your full name");
       return;
@@ -159,6 +202,7 @@ export default function CheckoutPage() {
         .from("orders")
         .insert([
           {
+            user_id: user.id,
             ticket_type_id: ticketTypeId,
             buyer_name: buyerName.trim(),
             buyer_email: buyerEmail.trim(),
@@ -239,7 +283,7 @@ export default function CheckoutPage() {
     }
   };
 
-  if (loading) {
+  if (loading || checkingAuth) {
     return (
       <main className="min-h-screen bg-black px-6 py-10 text-white">
         <div className="mx-auto max-w-3xl">
@@ -256,6 +300,42 @@ export default function CheckoutPage() {
         <div className="mx-auto max-w-3xl">
           <h1 className="mb-4 text-3xl font-bold">Checkout</h1>
           <p className="text-white/70">Ticket not found.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="min-h-screen bg-black px-6 py-10 text-white">
+        <div className="mx-auto max-w-3xl">
+          <div className="border border-white/10 bg-white/[0.03] p-6">
+            <p className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
+              Swift Tickets
+            </p>
+            <h1 className="text-4xl font-extrabold tracking-[-0.03em]">
+              Log in required
+            </h1>
+            <p className="mt-3 text-white/70">
+              You need to log in or sign up before buying tickets.
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a
+                href="/login"
+                className="bg-white px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90"
+              >
+                Log In
+              </a>
+
+              <a
+                href="/signup"
+                className="border border-white/15 px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:border-white/40"
+              >
+                Sign Up
+              </a>
+            </div>
+          </div>
         </div>
       </main>
     );

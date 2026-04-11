@@ -5,12 +5,22 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+type TicketTypeRow = {
+  id: string;
+  event_id: string;
+  name?: string | null;
+  price?: number | string | null;
+  quantity?: number | null;
+};
+
 type EventRow = {
   id: string;
-  title: string;
-  event_date: string;
-  location?: string;
-  image_url?: string;
+  title?: string | null;
+  description?: string | null;
+  event_date?: string | null;
+  location?: string | null;
+  image_url?: string | null;
+  ticket_types?: TicketTypeRow[] | null;
 };
 
 const categories = [
@@ -32,6 +42,53 @@ const rotatingSuggestions = [
   "Art Workshop In Pretoria",
 ];
 
+function getLowestTicketPrice(ticketTypes?: TicketTypeRow[] | null) {
+  if (!ticketTypes || ticketTypes.length === 0) return null;
+
+  const prices = ticketTypes
+    .map((ticket) => {
+      if (
+        ticket.price === null ||
+        ticket.price === undefined ||
+        ticket.price === ""
+      ) {
+        return null;
+      }
+
+      const numericPrice =
+        typeof ticket.price === "number"
+          ? ticket.price
+          : Number(String(ticket.price).replace(/,/g, ""));
+
+      return Number.isNaN(numericPrice) ? null : numericPrice;
+    })
+    .filter((price): price is number => price !== null);
+
+  if (prices.length === 0) return null;
+
+  return Math.min(...prices);
+}
+
+function formatPriceLabel(price: number | null) {
+  if (price === null) return null;
+  if (price === 0) return "FREE";
+  return `FROM R${price.toFixed(2)}`;
+}
+
+function formatEventDate(date?: string | null) {
+  if (!date) return "Date TBA";
+
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return "Date TBA";
+
+  return parsed.toLocaleDateString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default function HomePage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,23 +105,69 @@ export default function HomePage() {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  const [user, setUser] = useState<any>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const loadEvents = async () => {
-      const { data, error } = await supabase
+      const { data: eventsData, error: eventsError } = await supabase
         .from("events")
         .select("*")
         .order("event_date", { ascending: true });
 
-      if (!error && data) {
-        setEvents(data);
+      if (eventsError) {
+        setEvents([]);
+        setLoading(false);
+        return;
       }
 
+      const { data: ticketTypesData, error: ticketTypesError } = await supabase
+        .from("ticket_types")
+        .select("*");
+
+      const mergedEvents = (eventsData || []).map((event: any) => ({
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        event_date: event.event_date,
+        location: event.location,
+        image_url: event.image_url,
+        ticket_types: ticketTypesError
+          ? []
+          : (ticketTypesData || []).filter(
+              (ticket: any) => ticket.event_id === event.id
+            ),
+      }));
+
+      setEvents(mergedEvents as EventRow[]);
       setLoading(false);
     };
 
     loadEvents();
+  }, []);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      setUser(session?.user ?? null);
+      setCheckingAuth(false);
+    };
+
+    checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setCheckingAuth(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -160,7 +263,21 @@ export default function HomePage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const trendingEvents = useMemo(() => events.slice(0, 4), [events]);
+  const trendingEvents = useMemo(
+    () => events.filter((event) => event.id).slice(0, 4),
+    [events]
+  );
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    window.location.reload();
+  };
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -312,18 +429,45 @@ export default function HomePage() {
               <div className="invisible absolute right-0 top-full mt-3 w-[200px] translate-y-2 opacity-0 transition-all duration-300 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
                 <div className="rounded-sm border border-white/10 bg-black/95 p-2 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
                   <div className="flex flex-col gap-1">
-                    <Link
-                      href="/login"
-                      className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
-                    >
-                      Log in
-                    </Link>
-                    <Link
-                      href="/signup"
-                      className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
-                    >
-                      Sign up
-                    </Link>
+                    {!checkingAuth && user ? (
+                      <>
+                        <Link
+                          href="/dashboard"
+                          className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
+                        >
+                          Dashboard
+                        </Link>
+
+                        <Link
+                          href="/my-tickets"
+                          className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
+                        >
+                          My Tickets
+                        </Link>
+
+                        <button
+                          onClick={handleLogout}
+                          className="rounded-sm px-3 py-2 text-left text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
+                        >
+                          Log out
+                        </button>
+                      </>
+                    ) : !checkingAuth ? (
+                      <>
+                        <Link
+                          href="/login"
+                          className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
+                        >
+                          Log in
+                        </Link>
+                        <Link
+                          href="/signup"
+                          className="rounded-sm px-3 py-2 text-[14px] font-medium text-white transition hover:bg-white/10 hover:underline underline-offset-4"
+                        >
+                          Sign up
+                        </Link>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -367,27 +511,54 @@ export default function HomePage() {
             Sell My Ticket
           </Link>
 
-          <Link
-            href="/login"
-            className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
-          >
-            <span>Login</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="h-4 w-4"
+          {!checkingAuth && user ? (
+            <>
+              <Link
+                href="/dashboard"
+                className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+              >
+                Dashboard
+              </Link>
+
+              <Link
+                href="/my-tickets"
+                className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+              >
+                My Tickets
+              </Link>
+            </>
+          ) : !checkingAuth ? (
+            <Link
+              href="/login"
+              className="shrink-0 flex items-center justify-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M20 21a8 8 0 0 0-16 0"
-              />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-          </Link>
+              <span>Login</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-4 w-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M20 21a8 8 0 0 0-16 0"
+                />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </Link>
+          ) : null}
+
+          {!checkingAuth && user ? (
+            <button
+              onClick={handleLogout}
+              className="shrink-0 flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+            >
+              Log out
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -485,8 +656,8 @@ export default function HomePage() {
       </section>
 
       <div className="relative z-20 mx-auto max-w-[1300px] -mt-8 px-4 pt-4 pb-12 sm:-mt-10 sm:px-6 md:-mt-16">
-        <section className="mb-16">
-          <div className="mb-6 flex items-center justify-between gap-4">
+        <section className="mb-20">
+          <div className="mb-7 flex items-center justify-between gap-4">
             <h2 className="text-[28px] font-bold tracking-tight md:text-[30px]">
               Trending events
             </h2>
@@ -504,42 +675,103 @@ export default function HomePage() {
           ) : trendingEvents.length === 0 ? (
             <p className="text-gray-400">No events available yet.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {trendingEvents.map((event) => (
-                <Link key={event.id} href={`/events/${event.id}`}>
-                  <div className="group relative h-[280px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition hover:border-white/20">
-                    {event.image_url ? (
-                      <Image
-                        src={event.image_url}
-                        alt={event.title}
-                        fill
-                        unoptimized
-                        className="object-cover opacity-90 transition duration-500 group-hover:scale-110"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 bg-gray-800" />
-                    )}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:gap-x-5">
+              {trendingEvents.map((event, index) => {
+                const lowestPrice = getLowestTicketPrice(event.ticket_types);
+                const priceLabel = formatPriceLabel(lowestPrice);
+                const isOrange = index % 2 === 0;
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                const accentText = isOrange
+                  ? "group-hover:text-orange-500 group-active:text-orange-500"
+                  : "group-hover:text-sky-400 group-active:text-sky-400";
 
-                    <div className="absolute bottom-0 left-0 w-full p-4">
-                      <p className="mb-1 text-[12px] text-gray-300">
-                        {new Date(event.event_date).toLocaleDateString()}
-                      </p>
+                const accentBorder = isOrange
+                  ? "group-hover:border-orange-500 group-active:border-orange-500"
+                  : "group-hover:border-sky-400 group-active:border-sky-400";
 
-                      <h3 className="line-clamp-2 text-[20px] font-bold leading-tight">
-                        {event.title}
-                      </h3>
+                const accentButton = isOrange
+                  ? "group-hover:bg-orange-500 group-hover:text-black group-hover:border-orange-500 group-active:bg-orange-500 group-active:text-black group-active:border-orange-500"
+                  : "group-hover:bg-sky-400 group-hover:text-black group-hover:border-sky-400 group-active:bg-sky-400 group-active:text-black group-active:border-sky-400";
 
-                      {event.location && (
-                        <p className="mt-2 text-[13px] text-white/70">
-                          {event.location}
-                        </p>
-                      )}
+                return (
+                  <Link
+                    key={event.id}
+                    href={`/events/${event.id}`}
+                    className="block"
+                  >
+                    <div className="group mx-auto w-full max-w-[215px] text-white transition-transform duration-200 active:scale-[0.985]">
+                      <div className="relative aspect-[0.82] w-full overflow-hidden rounded-[10px] bg-zinc-900">
+                        {event.image_url ? (
+                          <Image
+                            src={event.image_url}
+                            alt={event.title || "Event image"}
+                            fill
+                            unoptimized
+                            className="object-cover transition duration-500 group-hover:scale-[1.02]"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 bg-[linear-gradient(180deg,#1e293b_0%,#020617_100%)]" />
+                        )}
+                      </div>
+
+                      <div className="pt-3">
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <p
+                            className={`pr-2 text-[11px] font-medium leading-tight text-white transition-colors duration-200 sm:text-[12px] ${accentText}`}
+                          >
+                            {formatEventDate(event.event_date)}
+                          </p>
+
+                          <button
+                            type="button"
+                            className={`shrink-0 text-white transition-all duration-200 hover:scale-110 ${accentText}`}
+                            onClick={(e) => e.preventDefault()}
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.1"
+                              className="h-5 w-5"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="m12 21-.9-.82C5 14.6 2 11.86 2 8.5 2 5.76 4.24 3.5 7 3.5c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16 3.5c2.76 0 5 2.26 5 5 0 3.36-3 6.1-9.1 11.68L12 21Z"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <h3
+                          className={`line-clamp-2 text-[15px] font-extrabold uppercase leading-[1.06] tracking-[-0.03em] text-white transition-colors duration-200 sm:text-[16px] ${accentText}`}
+                        >
+                          {event.title || "Untitled Event"}
+                        </h3>
+
+                        {event.location && (
+                          <p
+                            className={`mt-2 line-clamp-1 text-[12px] text-white/85 transition-colors duration-200 sm:text-[13px] ${accentText}`}
+                          >
+                            {event.location}
+                          </p>
+                        )}
+
+                        {priceLabel && (
+                          <div className="mt-4">
+                            <div
+                              className={`inline-flex min-h-[42px] items-center rounded-[4px] border border-white bg-white px-5 py-2.5 text-[11px] font-extrabold uppercase tracking-[-0.02em] text-black transition-all duration-200 sm:min-h-[44px] sm:px-6 sm:text-[12px] ${accentBorder} ${accentButton}`}
+                            >
+                              {priceLabel}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>

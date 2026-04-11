@@ -78,6 +78,7 @@ export default function EventPage() {
       Number(r.resale?.resale_price || 0)
     );
     const all = [...normalPrices, ...resalePrices].filter((n) => n > 0);
+
     if (all.length === 0) return null;
     return Math.min(...all);
   }, [ticketTypes, resaleTickets]);
@@ -133,7 +134,6 @@ export default function EventPage() {
           padding: "18px 24px 48px",
         }}
       >
-        {/* top nav */}
         <div
           style={{
             display: "flex",
@@ -153,7 +153,7 @@ export default function EventPage() {
           >
             <Link href="/" style={{ display: "flex", alignItems: "center" }}>
               <Image
-                src="/logo.png"
+                src="/logo.svg"
                 alt="Swift Tickets"
                 width={130}
                 height={40}
@@ -235,7 +235,6 @@ export default function EventPage() {
             alignItems: "start",
           }}
         >
-          {/* left column */}
           <div>
             <div
               style={{
@@ -330,9 +329,7 @@ export default function EventPage() {
             </a>
           </div>
 
-          {/* right column */}
           <div>
-            {/* blurred banner */}
             <div
               style={{
                 position: "relative",
