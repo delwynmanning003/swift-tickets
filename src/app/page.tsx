@@ -107,6 +107,7 @@ export default function HomePage() {
 
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -288,7 +289,7 @@ export default function HomePage() {
             : "bg-transparent"
         }`}
       >
-        <div className="flex items-center justify-between gap-4">
+        <div className="hidden items-center justify-between gap-4 md:flex">
           <Link href="/" className="flex shrink-0 items-center">
             <Image
               src="/logo.svg"
@@ -472,6 +473,170 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between md:hidden">
+          <div className="relative">
+            <button
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
+              aria-label="Open menu"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-5 w-5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 7h16M4 12h16M4 17h16"
+                />
+              </svg>
+            </button>
+
+            {mobileMenuOpen && (
+              <div className="absolute left-0 top-full z-50 mt-3 w-56 rounded-2xl border border-white/10 bg-black/95 p-2 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                <div className="flex flex-col gap-1">
+                  <Link
+                    href="/create-event"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="rounded-xl px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/10"
+                  >
+                    Create Event
+                  </Link>
+
+                  <Link
+                    href="/sell"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="rounded-xl px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/10"
+                  >
+                    Sell My Ticket
+                  </Link>
+
+                  {!checkingAuth && user ? (
+                    <>
+                      <Link
+                        href="/dashboard"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="rounded-xl px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/10"
+                      >
+                        Dashboard
+                      </Link>
+
+                      <Link
+                        href="/my-tickets"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="rounded-xl px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/10"
+                      >
+                        My Tickets
+                      </Link>
+
+                      <button
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          handleLogout();
+                        }}
+                        className="rounded-xl px-3 py-2 text-left text-[13px] font-medium text-white transition hover:bg-white/10"
+                      >
+                        Log out
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Link href="/" className="absolute left-1/2 -translate-x-1/2">
+            <Image
+              src="/logo.svg"
+              alt="Swift Tickets"
+              width={180}
+              height={56}
+              className="h-12 w-auto object-contain"
+              priority
+            />
+          </Link>
+
+          <div className="ml-auto flex items-center gap-2">
+            <Link
+              href="/categories"
+              className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
+            >
+              Explore
+            </Link>
+
+            {!checkingAuth && user ? (
+              <div className="group relative">
+                <button className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="h-5 w-5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M20 21a8 8 0 0 0-16 0"
+                    />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </button>
+
+                <div className="invisible absolute right-0 top-full mt-3 w-44 translate-y-2 opacity-0 transition-all duration-300 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                  <div className="rounded-2xl border border-white/10 bg-black/95 p-2 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                    <Link
+                      href="/dashboard"
+                      className="block rounded-xl px-3 py-2 text-[13px] text-white transition hover:bg-white/10"
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/my-tickets"
+                      className="block rounded-xl px-3 py-2 text-[13px] text-white transition hover:bg-white/10"
+                    >
+                      My Tickets
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="block w-full rounded-xl px-3 py-2 text-left text-[13px] text-white transition hover:bg-white/10"
+                    >
+                      Log out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : !checkingAuth ? (
+              <Link
+                href="/login"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
+                aria-label="Login"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-5 w-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M20 21a8 8 0 0 0-16 0"
+                  />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </Link>
+            ) : null}
           </div>
         </div>
       </header>

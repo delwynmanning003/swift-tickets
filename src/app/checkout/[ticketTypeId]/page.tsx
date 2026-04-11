@@ -23,6 +23,7 @@ type EventType = {
 export default function CheckoutPage() {
   const params = useParams();
   const ticketTypeId = params.ticketTypeId as string;
+  const redirectToCheckout = `/checkout/${ticketTypeId}`;
 
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -126,8 +127,20 @@ export default function CheckoutPage() {
     }
 
     const baseAmount = Number(ticket.price) * quantity;
-    const fixedFee = 2 * quantity;
-    const percentageFee = baseAmount * 0.03;
+    const isFree = baseAmount === 0;
+
+    if (isFree) {
+      return {
+        baseAmount: 0,
+        fixedFee: 0,
+        percentageFee: 0,
+        buyerTotal: 0,
+        organizerPayout: 0,
+      };
+    }
+
+    const fixedFee = 3 * quantity;
+    const percentageFee = baseAmount * 0.04;
 
     let buyerTotal = baseAmount;
     let organizerPayout = baseAmount;
@@ -166,8 +179,9 @@ export default function CheckoutPage() {
     }
 
     if (!user) {
-      alert("Please log in to continue");
-      window.location.href = "/login";
+      window.location.href = `/login?redirect=${encodeURIComponent(
+        redirectToCheckout
+      )}`;
       return;
     }
 
@@ -322,14 +336,14 @@ export default function CheckoutPage() {
 
             <div className="mt-6 flex flex-wrap gap-3">
               <a
-                href="/login"
+                href={`/login?redirect=${encodeURIComponent(redirectToCheckout)}`}
                 className="bg-white px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90"
               >
                 Log In
               </a>
 
               <a
-                href="/signup"
+                href={`/signup?redirect=${encodeURIComponent(redirectToCheckout)}`}
                 className="border border-white/15 px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:border-white/40"
               >
                 Sign Up
@@ -425,7 +439,9 @@ export default function CheckoutPage() {
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/65">Price per ticket</span>
                 <span className="font-medium">
-                  R{Number(ticket.price).toFixed(2)}
+                  {Number(ticket.price) === 0
+                    ? "FREE"
+                    : `R${Number(ticket.price).toFixed(2)}`}
                 </span>
               </div>
 
@@ -448,7 +464,9 @@ export default function CheckoutPage() {
               <div className="border-t border-white/10 pt-3">
                 <div className="flex items-center justify-between gap-4 text-base font-bold">
                   <span>Total Due</span>
-                  <span>R{amounts.buyerTotal.toFixed(2)}</span>
+                  <span>
+                    {isFreeTicket ? "FREE" : `R${amounts.buyerTotal.toFixed(2)}`}
+                  </span>
                 </div>
               </div>
             </div>
