@@ -55,16 +55,6 @@ export default function SignupPage() {
         throw new Error("Account was created, but no user was returned.");
       }
 
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email: trimmedEmail,
-        account_type: null,
-      });
-
-      if (profileError) {
-        throw profileError;
-      }
-
       window.location.href = "/dashboard";
     } catch (error: any) {
       alert(error?.message || "Something went wrong during signup");
