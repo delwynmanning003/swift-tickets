@@ -115,6 +115,20 @@ export default function CheckoutPage() {
     if (ticketTypeId) loadData();
   }, [ticketTypeId]);
 
+  const freeTicketLimit = 2;
+
+  const maxAllowedQuantity = useMemo(() => {
+    if (!ticket) return 1;
+
+    const availableQuantity = Math.max(0, Number(ticket.quantity) || 0);
+
+    if (Number(ticket.price) === 0) {
+      return Math.min(freeTicketLimit, availableQuantity);
+    }
+
+    return availableQuantity;
+  }, [ticket]);
+
   const amounts = useMemo(() => {
     if (!ticket || !eventData) {
       return {
@@ -126,7 +140,8 @@ export default function CheckoutPage() {
       };
     }
 
-    const baseAmount = Number(ticket.price) * quantity;
+    const safeQuantity = Math.max(1, Math.min(quantity, maxAllowedQuantity || 1));
+    const baseAmount = Number(ticket.price) * safeQuantity;
     const isFree = baseAmount === 0;
 
     if (isFree) {
@@ -139,7 +154,7 @@ export default function CheckoutPage() {
       };
     }
 
-    const fixedFee = 3 * quantity;
+    const fixedFee = 3 * safeQuantity;
     const percentageFee = baseAmount * 0.04;
 
     let buyerTotal = baseAmount;
@@ -167,7 +182,16 @@ export default function CheckoutPage() {
       buyerTotal,
       organizerPayout,
     };
-  }, [ticket, eventData, quantity]);
+  }, [ticket, eventData, quantity, maxAllowedQuantity]);
+
+  useEffect(() => {
+    if (!ticket) return;
+
+    setQuantity((current) => {
+      const next = Math.max(1, Math.min(current, maxAllowedQuantity || 1));
+      return next;
+    });
+  }, [ticket, maxAllowedQuantity]);
 
   const serviceFee = Math.max(amounts.buyerTotal - amounts.baseAmount, 0);
   const isFreeTicket = amounts.buyerTotal === 0;
@@ -197,6 +221,22 @@ export default function CheckoutPage() {
 
     if (quantity < 1) {
       alert("Quantity must be at least 1");
+      return;
+    }
+
+    if (Number(ticket.price) === 0 && quantity > freeTicketLimit) {
+      alert(`You can only claim ${freeTicketLimit} free tickets per order.`);
+      return;
+    }
+
+    if (quantity > maxAllowedQuantity) {
+      alert(
+        Number(ticket.price) === 0
+          ? `You can only claim ${maxAllowedQuantity} free ticket${
+              maxAllowedQuantity === 1 ? "" : "s"
+            } for this order.`
+          : "Not enough tickets available"
+      );
       return;
     }
 
@@ -415,13 +455,20 @@ export default function CheckoutPage() {
                   <input
                     type="number"
                     min={1}
-                    max={ticket.quantity}
+                    max={maxAllowedQuantity}
                     value={quantity}
-                    onChange={(e) =>
-                      setQuantity(Math.max(1, Number(e.target.value) || 1))
-                    }
+                    onChange={(e) => {
+                      const rawValue = Number(e.target.value);
+                      const safeValue = Math.max(1, rawValue || 1);
+                      setQuantity(Math.min(safeValue, maxAllowedQuantity || 1));
+                    }}
                     className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none focus:border-white/60"
                   />
+                  {Number(ticket.price) === 0 && (
+                    <p className="mt-2 text-sm text-white/55">
+                      Maximum {freeTicketLimit} free tickets per order.
+                    </p>
+                  )}
                 </div>
               </>
             )}
