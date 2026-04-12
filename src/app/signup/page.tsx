@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
@@ -16,6 +15,8 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
+    if (loading) return;
+
     if (!email || !firstName || !lastName || !password) {
       alert("Please fill in all required fields");
       return;
@@ -28,42 +29,48 @@ export default function SignupPage() {
 
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-        },
-      },
-    });
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+      const trimmedFirstName = firstName.trim();
+      const trimmedLastName = lastName.trim();
+      const trimmedPhone = phone.trim();
 
-    if (error) {
-      alert(error.message);
-      setLoading(false);
-      return;
-    }
-
-    if (data.user) {
-      const { error: profileError } = await supabase.from("profiles").upsert([
-        {
-          id: data.user.id,
-          email,
-          account_type: null,
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: {
+          data: {
+            first_name: trimmedFirstName,
+            last_name: trimmedLastName,
+            phone: trimmedPhone || null,
+          },
         },
-      ]);
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.user) {
+        throw new Error("Account was created, but no user was returned.");
+      }
+
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: data.user.id,
+        email: trimmedEmail,
+        account_type: null,
+      });
 
       if (profileError) {
-        alert(profileError.message);
-        setLoading(false);
-        return;
+        throw profileError;
       }
-    }
 
-    setLoading(false);
-    window.location.href = "/dashboard";
+      window.location.href = "/dashboard";
+    } catch (error: any) {
+      alert(error?.message || "Something went wrong during signup");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,310 +93,79 @@ export default function SignupPage() {
         }}
       />
 
-      <div
-        style={{
-          position: "absolute",
-          top: "88px",
-          left: "8%",
-          width: "260px",
-          height: "260px",
-          borderTop: "10px solid rgba(255,255,255,0.88)",
-          borderLeft: "10px solid transparent",
-          borderRight: "10px solid transparent",
-          borderRadius: "50% 50% 0 0",
-          transform: "rotate(-10deg)",
-          opacity: 0.8,
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          top: "88px",
-          right: "8%",
-          width: "260px",
-          height: "260px",
-          borderTop: "10px solid rgba(255,255,255,0.88)",
-          borderLeft: "10px solid transparent",
-          borderRight: "10px solid transparent",
-          borderRadius: "50% 50% 0 0",
-          transform: "rotate(10deg)",
-          opacity: 0.8,
-        }}
-      />
+      <div className="signup-decor-left-arc" />
+      <div className="signup-decor-right-arc" />
+      <div className="signup-decor-left-bar" />
+      <div className="signup-decor-right-bar" />
 
-      <div
-        style={{
-          position: "absolute",
-          top: "138px",
-          left: "12%",
-          width: "178px",
-          height: "22px",
-          background:
-            "repeating-linear-gradient(to right, #f97316, #f97316 6px, transparent 6px, transparent 12px)",
-          boxShadow: "0 0 40px rgba(249,115,22,0.85)",
-          transform: "skew(-18deg)",
-          borderRadius: "4px",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          top: "138px",
-          right: "12%",
-          width: "178px",
-          height: "22px",
-          background:
-            "repeating-linear-gradient(to right, #3b82f6, #3b82f6 6px, transparent 6px, transparent 12px)",
-          boxShadow: "0 0 40px rgba(59,130,246,0.85)",
-          transform: "skew(18deg)",
-          borderRadius: "4px",
-        }}
-      />
-
-      <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          minHeight: "100vh",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: "24px 16px",
-        }}
-      >
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 560,
-            background: "#f8f6f3",
-            borderRadius: 22,
-            padding: 22,
-            boxShadow: "0 30px 80px rgba(0,0,0,0.40)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              marginBottom: 16,
-            }}
-          >
-            <Image
-              src="/logo.png"
+      <div className="signup-shell">
+        <div className="signup-card">
+          <div className="signup-logo-wrap">
+            <img
+              src="/logo.svg"
               alt="Swift Tickets"
-              width={120}
-              height={38}
-              style={{ objectFit: "contain" }}
+              className="signup-logo"
             />
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              background: "#efede9",
-              borderRadius: 999,
-              padding: 5,
-              marginBottom: 16,
-            }}
-          >
-            <Link
-              href="/login"
-              style={{
-                flex: 1,
-                textAlign: "center",
-                textDecoration: "none",
-                color: "#6c6c6c",
-                fontWeight: 600,
-                fontSize: 16,
-                padding: "14px 16px",
-                borderRadius: 999,
-              }}
-            >
+          <div className="signup-switcher">
+            <Link href="/login" className="signup-switch-link">
               Log in
             </Link>
 
-            <div
-              style={{
-                flex: 1,
-                textAlign: "center",
-                background: "#ffffff",
-                color: "#161616",
-                fontWeight: 700,
-                fontSize: 16,
-                padding: "14px 16px",
-                borderRadius: 999,
-                boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
-              }}
-            >
-              Sign up
-            </div>
+            <div className="signup-switch-active">Sign up</div>
           </div>
 
-          <div style={{ display: "grid", gap: 14 }}>
-            <div
-              style={{
-                border: "2px solid #d9d6d1",
-                borderRadius: 14,
-                padding: "12px 16px 10px",
-                background: "#f8f6f3",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "#6f6f6f",
-                  marginBottom: 5,
-                  fontWeight: 500,
-                }}
-              >
-                Email address
-              </div>
+          <div className="signup-form-grid">
+            <div className="signup-field">
+              <div className="signup-label">Email address</div>
               <input
+                type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="isabella.swan@example.com"
-                style={{
-                  width: "100%",
-                  border: "none",
-                  outline: "none",
-                  background: "transparent",
-                  fontSize: 18,
-                  color: "#222222",
-                  fontWeight: 500,
-                }}
+                className="signup-input"
               />
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 14,
-              }}
-            >
-              <div
-                style={{
-                  border: "2px solid #d9d6d1",
-                  borderRadius: 14,
-                  padding: "12px 16px 10px",
-                  background: "#f8f6f3",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#6f6f6f",
-                    marginBottom: 5,
-                    fontWeight: 500,
-                  }}
-                >
-                  First name
-                </div>
+            <div className="signup-name-grid">
+              <div className="signup-field">
+                <div className="signup-label">First name</div>
                 <input
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Isabella"
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    fontSize: 18,
-                    color: "#222222",
-                    fontWeight: 500,
-                  }}
+                  className="signup-input"
                 />
               </div>
 
-              <div
-                style={{
-                  border: "2px solid #d9d6d1",
-                  borderRadius: 14,
-                  padding: "12px 16px 10px",
-                  background: "#f8f6f3",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#6f6f6f",
-                    marginBottom: 5,
-                    fontWeight: 500,
-                  }}
-                >
-                  Last name
-                </div>
+              <div className="signup-field">
+                <div className="signup-label">Last name</div>
                 <input
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Swan"
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    fontSize: 18,
-                    color: "#222222",
-                    fontWeight: 500,
-                  }}
+                  className="signup-input"
                 />
               </div>
             </div>
 
-            <div
-              style={{
-                border: "2px solid #d9d6d1",
-                borderRadius: 14,
-                padding: "12px 16px 10px",
-                background: "#f8f6f3",
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
+            <div className="signup-field signup-password-field">
               <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#6f6f6f",
-                    marginBottom: 5,
-                    fontWeight: 500,
-                  }}
-                >
-                  Password
-                </div>
+                <div className="signup-label">Password</div>
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    fontSize: 18,
-                    color: "#222222",
-                    fontWeight: 500,
-                  }}
+                  className="signup-input"
                 />
               </div>
 
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  width: 28,
-                  height: 28,
-                  padding: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+                className="signup-eye-btn"
                 aria-label="Toggle password visibility"
               >
                 <svg
@@ -408,90 +184,37 @@ export default function SignupPage() {
               </button>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "100px 1fr",
-                border: "2px solid #d9d6d1",
-                borderRadius: 14,
-                overflow: "hidden",
-                background: "#f8f6f3",
-              }}
-            >
-              <div
-                style={{
-                  borderRight: "2px solid #d9d6d1",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  minHeight: 72,
-                  fontSize: 22,
-                  color: "#111111",
-                }}
-              >
+            <div className="signup-phone-wrap">
+              <div className="signup-phone-flag">
                 <span>🇿🇦</span>
-                <span style={{ fontSize: 14, color: "#6f6f6f" }}>⌄</span>
+                <span className="signup-flag-arrow">⌄</span>
               </div>
 
-              <div style={{ padding: "12px 16px 10px" }}>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#6f6f6f",
-                    marginBottom: 5,
-                    fontWeight: 500,
-                  }}
-                >
-                  Phone number (Optional)
-                </div>
+              <div className="signup-phone-field">
+                <div className="signup-label">Phone number (Optional)</div>
                 <input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="Phone number"
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    fontSize: 18,
-                    color: "#222222",
-                    fontWeight: 500,
-                  }}
+                  className="signup-input"
                 />
               </div>
             </div>
 
-            <label
-              style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "flex-start",
-                cursor: "pointer",
-                lineHeight: 1.45,
-                color: "#3f3f46",
-                fontSize: 15,
-                marginTop: 2,
-              }}
-            >
+            <label className="signup-checkbox-row">
               <input
                 type="checkbox"
                 checked={acceptedTerms}
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
-                style={{
-                  width: 20,
-                  height: 20,
-                  marginTop: 2,
-                  accentColor: "#6b6b6b",
-                }}
+                className="signup-checkbox"
               />
               <span>
                 By checking this box, you agree to our{" "}
-                <a href="#" style={{ color: "#2563eb" }}>
+                <a href="#" className="signup-link">
                   Terms of Use
                 </a>
                 , and acknowledge having read our{" "}
-                <a href="#" style={{ color: "#2563eb" }}>
+                <a href="#" className="signup-link">
                   Privacy Notice
                 </a>
                 .
@@ -501,23 +224,329 @@ export default function SignupPage() {
             <button
               onClick={handleSignup}
               disabled={loading}
-              style={{
-                width: "100%",
-                background: "#000000",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: 14,
-                padding: "18px 20px",
-                fontSize: 18,
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
+              className="signup-submit-btn"
             >
               {loading ? "Creating account..." : "Sign up"}
             </button>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .signup-shell {
+          position: relative;
+          z-index: 2;
+          min-height: 100vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 24px 16px;
+        }
+
+        .signup-card {
+          width: 100%;
+          max-width: 560px;
+          background: #f8f6f3;
+          border-radius: 22px;
+          padding: 22px;
+          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        .signup-logo-wrap {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 16px;
+        }
+
+        .signup-logo {
+          width: 140px;
+          max-width: 100%;
+          height: auto;
+          object-fit: contain;
+          display: block;
+        }
+
+        .signup-switcher {
+          display: flex;
+          align-items: center;
+          background: #efede9;
+          border-radius: 999px;
+          padding: 5px;
+          margin-bottom: 16px;
+        }
+
+        .signup-switch-link {
+          flex: 1;
+          text-align: center;
+          text-decoration: none;
+          color: #6c6c6c;
+          font-weight: 600;
+          font-size: 16px;
+          padding: 14px 16px;
+          border-radius: 999px;
+        }
+
+        .signup-switch-active {
+          flex: 1;
+          text-align: center;
+          background: #ffffff;
+          color: #161616;
+          font-weight: 700;
+          font-size: 16px;
+          padding: 14px 16px;
+          border-radius: 999px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .signup-form-grid {
+          display: grid;
+          gap: 14px;
+        }
+
+        .signup-name-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+
+        .signup-field {
+          border: 2px solid #d9d6d1;
+          border-radius: 14px;
+          padding: 12px 16px 10px;
+          background: #f8f6f3;
+        }
+
+        .signup-label {
+          font-size: 12px;
+          color: #6f6f6f;
+          margin-bottom: 5px;
+          font-weight: 500;
+        }
+
+        .signup-input {
+          width: 100%;
+          border: none;
+          outline: none;
+          background: transparent;
+          font-size: 18px;
+          color: #222222;
+          font-weight: 500;
+        }
+
+        .signup-password-field {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .signup-eye-btn {
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          width: 28px;
+          height: 28px;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .signup-phone-wrap {
+          display: grid;
+          grid-template-columns: 100px 1fr;
+          border: 2px solid #d9d6d1;
+          border-radius: 14px;
+          overflow: hidden;
+          background: #f8f6f3;
+        }
+
+        .signup-phone-flag {
+          border-right: 2px solid #d9d6d1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          min-height: 72px;
+          font-size: 22px;
+          color: #111111;
+        }
+
+        .signup-flag-arrow {
+          font-size: 14px;
+          color: #6f6f6f;
+        }
+
+        .signup-phone-field {
+          padding: 12px 16px 10px;
+        }
+
+        .signup-checkbox-row {
+          display: flex;
+          gap: 12px;
+          align-items: flex-start;
+          cursor: pointer;
+          line-height: 1.45;
+          color: #3f3f46;
+          font-size: 15px;
+          margin-top: 2px;
+        }
+
+        .signup-checkbox {
+          width: 20px;
+          height: 20px;
+          margin-top: 2px;
+          accent-color: #6b6b6b;
+          flex-shrink: 0;
+        }
+
+        .signup-link {
+          color: #2563eb;
+        }
+
+        .signup-submit-btn {
+          width: 100%;
+          background: #000000;
+          color: #ffffff;
+          border: none;
+          border-radius: 14px;
+          padding: 18px 20px;
+          font-size: 18px;
+          font-weight: 700;
+          cursor: ${loading ? "not-allowed" : "pointer"};
+          opacity: ${loading ? 0.8 : 1};
+        }
+
+        .signup-decor-left-arc,
+        .signup-decor-right-arc {
+          position: absolute;
+          top: 88px;
+          width: 260px;
+          height: 260px;
+          border-top: 10px solid rgba(255, 255, 255, 0.88);
+          border-left: 10px solid transparent;
+          border-right: 10px solid transparent;
+          border-radius: 50% 50% 0 0;
+          opacity: 0.8;
+        }
+
+        .signup-decor-left-arc {
+          left: 8%;
+          transform: rotate(-10deg);
+        }
+
+        .signup-decor-right-arc {
+          right: 8%;
+          transform: rotate(10deg);
+        }
+
+        .signup-decor-left-bar,
+        .signup-decor-right-bar {
+          position: absolute;
+          top: 138px;
+          width: 178px;
+          height: 22px;
+          border-radius: 4px;
+        }
+
+        .signup-decor-left-bar {
+          left: 12%;
+          background: repeating-linear-gradient(
+            to right,
+            #f97316,
+            #f97316 6px,
+            transparent 6px,
+            transparent 12px
+          );
+          box-shadow: 0 0 40px rgba(249, 115, 22, 0.85);
+          transform: skew(-18deg);
+        }
+
+        .signup-decor-right-bar {
+          right: 12%;
+          background: repeating-linear-gradient(
+            to right,
+            #3b82f6,
+            #3b82f6 6px,
+            transparent 6px,
+            transparent 12px
+          );
+          box-shadow: 0 0 40px rgba(59, 130, 246, 0.85);
+          transform: skew(18deg);
+        }
+
+        @media (max-width: 900px) {
+          .signup-decor-left-arc,
+          .signup-decor-right-arc {
+            width: 180px;
+            height: 180px;
+            top: 70px;
+          }
+
+          .signup-decor-left-bar,
+          .signup-decor-right-bar {
+            width: 120px;
+            height: 16px;
+            top: 106px;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .signup-shell {
+            padding: 18px 12px;
+            align-items: center;
+          }
+
+          .signup-card {
+            max-width: 100%;
+            border-radius: 18px;
+            padding: 16px;
+          }
+
+          .signup-logo {
+            width: 118px;
+          }
+
+          .signup-switch-link,
+          .signup-switch-active {
+            font-size: 14px;
+            padding: 12px 10px;
+          }
+
+          .signup-name-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .signup-phone-wrap {
+            grid-template-columns: 82px 1fr;
+          }
+
+          .signup-phone-flag {
+            min-height: 68px;
+            font-size: 20px;
+          }
+
+          .signup-input {
+            font-size: 16px;
+          }
+
+          .signup-submit-btn {
+            padding: 16px 18px;
+            font-size: 17px;
+          }
+
+          .signup-checkbox-row {
+            font-size: 14px;
+          }
+
+          .signup-decor-left-arc,
+          .signup-decor-right-arc,
+          .signup-decor-left-bar,
+          .signup-decor-right-bar {
+            display: none;
+          }
+        }
+      `}</style>
     </main>
   );
 }
