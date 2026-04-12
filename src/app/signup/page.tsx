@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/dashboard";
+
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -55,7 +59,7 @@ export default function SignupPage() {
         throw new Error("Account was created, but no user was returned.");
       }
 
-      window.location.href = "/dashboard";
+      window.location.href = redirect;
     } catch (error: any) {
       alert(error?.message || "Something went wrong during signup");
     } finally {
@@ -99,7 +103,12 @@ export default function SignupPage() {
           </div>
 
           <div className="signup-switcher">
-            <Link href="/login" className="signup-switch-link">
+            <Link
+              href={`/login${
+                redirect ? `?redirect=${encodeURIComponent(redirect)}` : ""
+              }`}
+              className="signup-switch-link"
+            >
               Log in
             </Link>
 
