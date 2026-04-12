@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/dashboard";
+  const [redirect, setRedirect] = useState("/dashboard");
 
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -17,6 +15,17 @@ export default function SignupPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const redirectParam = params.get("redirect");
+
+    if (redirectParam) {
+      setRedirect(redirectParam);
+    }
+  }, []);
 
   const handleSignup = async () => {
     if (loading) return;
@@ -67,6 +76,11 @@ export default function SignupPage() {
     }
   };
 
+  const loginHref =
+    redirect && redirect !== "/dashboard"
+      ? `/login?redirect=${encodeURIComponent(redirect)}`
+      : "/login";
+
   return (
     <main
       style={{
@@ -103,12 +117,7 @@ export default function SignupPage() {
           </div>
 
           <div className="signup-switcher">
-            <Link
-              href={`/login${
-                redirect ? `?redirect=${encodeURIComponent(redirect)}` : ""
-              }`}
-              className="signup-switch-link"
-            >
+            <Link href={loginHref} className="signup-switch-link">
               Log in
             </Link>
 
