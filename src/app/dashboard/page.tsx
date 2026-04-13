@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type EventRow = {
@@ -22,15 +22,14 @@ type TicketTypeRow = {
   id: string;
   event_id: string;
   name: string;
-  price: number | string;
-  quantity: number | string;
+  price: number | string | null;
+  quantity: number | string | null;
 };
 
 type TicketRow = {
   id: string;
-  event_id?: string | null;
   ticket_type_id: string | null;
-  status?: string | null;
+  status: string | null;
 };
 
 type EventAnalytics = {
@@ -40,6 +39,44 @@ type EventAnalytics = {
   grossRevenue: number;
   ticketTypesCount: number;
 };
+
+const SOLD_STATUSES = new Set([
+  "paid",
+  "completed",
+  "confirmed",
+  "success",
+  "checked_in",
+  "checked-in",
+  "checked in",
+]);
+
+function normalizeStatus(status?: string | null) {
+  return (status || "").trim().toLowerCase();
+}
+
+function isSoldTicket(status?: string | null) {
+  return SOLD_STATUSES.has(normalizeStatus(status));
+}
+
+function formatMoney(value: number) {
+  return `R${value.toFixed(2)}`;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Date coming soon";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date coming soon";
+
+  return date.toLocaleString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -72,136 +109,172 @@ export default function DashboardPage() {
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const loadDashboard = async () => {
-      if (!user?.id) {
-        setLoading(false);
-        return;
-      }
+  const loadDashboard = useCallback(async () => {
+    if (!user?.id) {
+      setEvents([]);
+      setAnalytics({});
+      setIsOrganiser(false);
+      setLoading(false);
+      return;
+    }
 
-      try {
-        setLoading(true);
+    try {
+      setLoading(true);
 
-        const { data: eventRows, error: eventsError } = await supabase
+      const [ownedEventsRes, organiserEventsRes] = await Promise.all([
+        supabase
           .from("events")
           .select("*")
           .eq("user_id", user.id)
-          .order("event_date", { ascending: false });
+          .order("event_date", { ascending: false }),
 
-        if (eventsError) {
-          throw new Error(eventsError.message);
-        }
+        user.email
+          ? supabase
+              .from("events")
+              .select("*")
+              .eq("organizer_email", user.email)
+              .order("event_date", { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
-        const eventsData = (eventRows || []) as EventRow[];
-        setEvents(eventsData);
+      if (ownedEventsRes.error) {
+        throw new Error(ownedEventsRes.error.message);
+      }
 
-        const organiserCheck = eventsData.some(
+      if (organiserEventsRes.error) {
+        throw new Error(organiserEventsRes.error.message);
+      }
+
+      const mergedEvents = [
+        ...((ownedEventsRes.data || []) as EventRow[]),
+        ...((organiserEventsRes.data || []) as EventRow[]),
+      ];
+
+      const uniqueEventsMap = new Map<string, EventRow>();
+      for (const event of mergedEvents) {
+        uniqueEventsMap.set(event.id, event);
+      }
+
+      const eventsData = Array.from(uniqueEventsMap.values()).sort((a, b) => {
+        const aTime = a.event_date ? new Date(a.event_date).getTime() : 0;
+        const bTime = b.event_date ? new Date(b.event_date).getTime() : 0;
+        return bTime - aTime;
+      });
+
+      setEvents(eventsData);
+
+      const organiserCheck =
+        eventsData.some(
           (event) =>
-            event.creator_type === "organiser" ||
+            event.creator_type?.toLowerCase() === "organiser" ||
             event.organizer_email === user.email
-        );
+        ) || false;
 
-        setIsOrganiser(organiserCheck);
+      setIsOrganiser(organiserCheck);
 
-        if (eventsData.length === 0) {
-          setAnalytics({});
-          return;
+      if (eventsData.length === 0) {
+        setAnalytics({});
+        return;
+      }
+
+      const eventIds = eventsData.map((event) => event.id);
+
+      const { data: ticketTypeRows, error: ticketTypesError } = await supabase
+        .from("ticket_types")
+        .select("id, event_id, name, price, quantity")
+        .in("event_id", eventIds);
+
+      if (ticketTypesError) {
+        throw new Error(ticketTypesError.message);
+      }
+
+      const typedTicketTypes = (ticketTypeRows || []) as TicketTypeRow[];
+      const ticketTypeIds = typedTicketTypes.map((ticketType) => ticketType.id);
+
+      let typedTickets: TicketRow[] = [];
+
+      if (ticketTypeIds.length > 0) {
+        const { data: ticketRows, error: ticketsError } = await supabase
+          .from("tickets")
+          .select("id, ticket_type_id, status")
+          .in("ticket_type_id", ticketTypeIds);
+
+        if (ticketsError) {
+          throw new Error(ticketsError.message);
         }
 
-        const eventIds = eventsData.map((event) => event.id);
+        typedTickets = (ticketRows || []) as TicketRow[];
+      }
 
-        const { data: ticketTypeRows, error: ticketTypesError } = await supabase
-          .from("ticket_types")
-          .select("id, event_id, name, price, quantity")
-          .in("event_id", eventIds);
+      const ticketTypesByEvent = typedTicketTypes.reduce<Record<string, TicketTypeRow[]>>(
+        (acc, ticketType) => {
+          if (!acc[ticketType.event_id]) acc[ticketType.event_id] = [];
+          acc[ticketType.event_id].push(ticketType);
+          return acc;
+        },
+        {}
+      );
 
-        if (ticketTypesError) {
-          throw new Error(ticketTypesError.message);
-        }
+      const ticketsByTicketType = typedTickets.reduce<Record<string, TicketRow[]>>(
+        (acc, ticket) => {
+          const key = ticket.ticket_type_id;
+          if (!key) return acc;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(ticket);
+          return acc;
+        },
+        {}
+      );
 
-        const typedTicketTypes = (ticketTypeRows || []) as TicketTypeRow[];
-        const ticketTypeIds = typedTicketTypes.map((ticketType) => ticketType.id);
+      const analyticsMap: Record<string, EventAnalytics> = {};
 
-        let typedTickets: TicketRow[] = [];
+      for (const event of eventsData) {
+        const eventTicketTypes = ticketTypesByEvent[event.id] || [];
 
-        if (ticketTypeIds.length > 0) {
-          const { data: ticketRows, error: ticketsError } = await supabase
-            .from("tickets")
-            .select("id, ticket_type_id, status")
-            .in("ticket_type_id", ticketTypeIds);
+        const totalCapacity = eventTicketTypes.reduce((sum, ticketType) => {
+          return sum + Number(ticketType.quantity || 0);
+        }, 0);
 
-          if (ticketsError) {
-            throw new Error(ticketsError.message);
-          }
+        let ticketsSold = 0;
+        let grossRevenue = 0;
 
-          typedTickets = (ticketRows || []) as TicketRow[];
-        }
-
-        const ticketTypesByEvent = typedTicketTypes.reduce<Record<string, TicketTypeRow[]>>(
-          (acc, ticketType) => {
-            if (!acc[ticketType.event_id]) acc[ticketType.event_id] = [];
-            acc[ticketType.event_id].push(ticketType);
-            return acc;
-          },
-          {}
-        );
-
-        const ticketsByTicketType = typedTickets.reduce<Record<string, TicketRow[]>>(
-          (acc, ticket) => {
-            const key = ticket.ticket_type_id;
-            if (!key) return acc;
-            if (!acc[key]) acc[key] = [];
-            acc[key].push(ticket);
-            return acc;
-          },
-          {}
-        );
-
-        const analyticsMap: Record<string, EventAnalytics> = {};
-
-        for (const event of eventsData) {
-          const eventTicketTypes = ticketTypesByEvent[event.id] || [];
-
-          const totalCapacity = eventTicketTypes.reduce(
-            (sum, ticketType) => sum + Number(ticketType.quantity || 0),
-            0
+        for (const ticketType of eventTicketTypes) {
+          const soldTicketsForType = (ticketsByTicketType[ticketType.id] || []).filter(
+            (ticket) => isSoldTicket(ticket.status)
           );
 
-          let ticketsSold = 0;
-          let grossRevenue = 0;
+          const soldCount = soldTicketsForType.length;
+          const ticketPrice = Number(ticketType.price || 0);
 
-          for (const ticketType of eventTicketTypes) {
-            const soldForType = (ticketsByTicketType[ticketType.id] || []).filter(
-              (ticket) => ticket.status !== "cancelled"
-            ).length;
-
-            ticketsSold += soldForType;
-            grossRevenue += soldForType * Number(ticketType.price || 0);
-          }
-
-          const ticketsLeft = Math.max(totalCapacity - ticketsSold, 0);
-
-          analyticsMap[event.id] = {
-            totalCapacity,
-            ticketsSold,
-            ticketsLeft,
-            grossRevenue,
-            ticketTypesCount: eventTicketTypes.length,
-          };
+          ticketsSold += soldCount;
+          grossRevenue += soldCount * ticketPrice;
         }
 
-        setAnalytics(analyticsMap);
-      } catch (error) {
-        console.error("Dashboard load error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+        const ticketsLeft = Math.max(totalCapacity - ticketsSold, 0);
 
+        analyticsMap[event.id] = {
+          totalCapacity,
+          ticketsSold,
+          ticketsLeft,
+          grossRevenue,
+          ticketTypesCount: eventTicketTypes.length,
+        };
+      }
+
+      setAnalytics(analyticsMap);
+    } catch (error) {
+      console.error("Dashboard load error:", error);
+      alert(error instanceof Error ? error.message : "Failed to load dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (!checkingAuth) {
       loadDashboard();
     }
-  }, [user, checkingAuth]);
+  }, [checkingAuth, loadDashboard]);
 
   const totals = useMemo(() => {
     return events.reduce(
@@ -263,19 +336,13 @@ export default function DashboardPage() {
       const { error: deleteEventError } = await supabase
         .from("events")
         .delete()
-        .eq("id", eventId)
-        .eq("user_id", user.id);
+        .eq("id", eventId);
 
       if (deleteEventError) {
         throw new Error(deleteEventError.message);
       }
 
-      setEvents((prev) => prev.filter((event) => event.id !== eventId));
-      setAnalytics((prev) => {
-        const next = { ...prev };
-        delete next[eventId];
-        return next;
-      });
+      await loadDashboard();
     } catch (error) {
       console.error("Delete event error:", error);
       alert(error instanceof Error ? error.message : "Failed to delete event");
@@ -373,7 +440,7 @@ export default function DashboardPage() {
               Gross Revenue
             </p>
             <p className="mt-3 text-[30px] font-extrabold">
-              R{totals.revenue.toFixed(2)}
+              {formatMoney(totals.revenue)}
             </p>
           </div>
         </div>
@@ -392,6 +459,14 @@ export default function DashboardPage() {
                 Scanner
               </Link>
             )}
+
+            <button
+              type="button"
+              onClick={loadDashboard}
+              className="border border-white/25 px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
+            >
+              Refresh
+            </button>
 
             <Link
               href="/create-event"
@@ -468,16 +543,7 @@ export default function DashboardPage() {
                       </p>
 
                       <p className="mt-1 text-[13px] text-white/50">
-                        {event.event_date
-                          ? new Date(event.event_date).toLocaleString("en-ZA", {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "Date coming soon"}
+                        {formatDate(event.event_date)}
                       </p>
 
                       {event.description ? (
@@ -520,7 +586,7 @@ export default function DashboardPage() {
                           Revenue
                         </p>
                         <p className="mt-2 text-[24px] font-extrabold">
-                          R{stats.grossRevenue.toFixed(2)}
+                          {formatMoney(stats.grossRevenue)}
                         </p>
                       </div>
                     </div>
@@ -537,7 +603,7 @@ export default function DashboardPage() {
                         href={`/edit-event/${event.id}`}
                         className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
                       >
-                        Edit Event
+                        Edit Event / Tickets
                       </Link>
 
                       <button
