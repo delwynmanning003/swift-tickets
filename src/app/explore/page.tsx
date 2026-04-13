@@ -1,20 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
 type EventType = {
   id: string;
   title: string;
-  location?: string;
-  event_date?: string;
-  category?: string;
-  image_url?: string;
+  location?: string | null;
+  event_date?: string | null;
+  category?: string | null;
+  image_url?: string | null;
 };
 
-export default function ExplorePage() {
+function formatEventDate(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function ExploreContent() {
   const searchParams = useSearchParams();
   const category = searchParams.get("category");
 
@@ -22,36 +39,51 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadEvents = async () => {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      let query = supabase
-        .from("events")
-        .select("*")
-        .order("event_date", { ascending: true });
+        let query = supabase
+          .from("events")
+          .select("id, title, location, event_date, category, image_url")
+          .order("event_date", { ascending: true });
 
-      if (category) {
-        query = query.eq("category", category);
+        if (category) {
+          query = query.eq("category", category);
+        }
+
+        const { data, error } = await query;
+
+        if (!isMounted) return;
+
+        if (error) {
+          console.error("Explore page error:", error);
+          setEvents([]);
+        } else {
+          setEvents((data || []) as EventType[]);
+        }
+      } catch (error) {
+        console.error("Explore page unexpected error:", error);
+        if (isMounted) setEvents([]);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error("Explore page error:", error);
-        setEvents([]);
-      } else {
-        setEvents(data || []);
-      }
-
-      setLoading(false);
     };
 
     loadEvents();
+
+    return () => {
+      isMounted = false;
+    };
   }, [category]);
 
-  const pageTitle = category
-    ? `${category.charAt(0).toUpperCase()}${category.slice(1)} Events`
-    : "Explore Events";
+  const pageTitle = useMemo(() => {
+    return category
+      ? `${category.charAt(0).toUpperCase()}${category.slice(1)} Events`
+      : "Explore Events";
+  }, [category]);
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -119,12 +151,13 @@ export default function ExplorePage() {
                 href={`/events/${event.id}`}
                 className="overflow-hidden border border-white/10 bg-white/[0.03] transition hover:border-white/30"
               >
-                <div className="h-56 w-full bg-white/5">
+                <div className="relative h-56 w-full bg-white/5">
                   {event.image_url ? (
-                    <img
+                    <Image
                       src={event.image_url}
                       alt={event.title}
-                      className="h-full w-full object-cover"
+                      fill
+                      className="object-cover"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-white/30">
@@ -140,12 +173,16 @@ export default function ExplorePage() {
                   <h2 className="text-2xl font-bold tracking-[-0.02em]">
                     {event.title}
                   </h2>
-                  {event.location && (
+
+                  {event.location ? (
                     <p className="mt-2 text-white/65">{event.location}</p>
-                  )}
-                  {event.event_date && (
-                    <p className="mt-1 text-white/45">{event.event_date}</p>
-                  )}
+                  ) : null}
+
+                  {event.event_date ? (
+                    <p className="mt-1 text-white/45">
+                      {formatEventDate(event.event_date)}
+                    </p>
+                  ) : null}
                 </div>
               </Link>
             ))}
@@ -153,5 +190,21 @@ export default function ExplorePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function ExplorePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-black text-white">
+          <div className="mx-auto max-w-7xl px-6 py-10">
+            <p className="text-white/60">Loading events...</p>
+          </div>
+        </main>
+      }
+    >
+      <ExploreContent />
+    </Suspense>
   );
 }
