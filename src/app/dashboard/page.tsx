@@ -40,6 +40,15 @@ type EventAnalytics = {
   ticketTypesCount: number;
 };
 
+type PayoutForm = {
+  account_holder_name: string;
+  business_name: string;
+  bank_name: string;
+  account_number: string;
+  account_type: string;
+  branch_code: string;
+};
+
 const SOLD_STATUSES = new Set([
   "paid",
   "completed",
@@ -82,10 +91,26 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [loading, setLoading] = useState(true);
+
   const [events, setEvents] = useState<EventRow[]>([]);
   const [analytics, setAnalytics] = useState<Record<string, EventAnalytics>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const [isOrganiser, setIsOrganiser] = useState(false);
+  const [hasCreatedEvents, setHasCreatedEvents] = useState(false);
+
+  const [activeSection, setActiveSection] = useState<"overview" | "events" | "payouts">("overview");
+
+  const [payoutForm, setPayoutForm] = useState<PayoutForm>({
+    account_holder_name: "",
+    business_name: "",
+    bank_name: "",
+    account_number: "",
+    account_type: "",
+    branch_code: "",
+  });
+
+  const [payoutSaving, setPayoutSaving] = useState(false);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -114,6 +139,7 @@ export default function DashboardPage() {
       setEvents([]);
       setAnalytics({});
       setIsOrganiser(false);
+      setHasCreatedEvents(false);
       setLoading(false);
       return;
     }
@@ -121,63 +147,37 @@ export default function DashboardPage() {
     try {
       setLoading(true);
 
-      const [ownedEventsRes, organiserEventsRes] = await Promise.all([
-        supabase
-          .from("events")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("event_date", { ascending: false }),
+      const { data: ownedEventsRows, error: ownedEventsError } = await supabase
+        .from("events")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("event_date", { ascending: false });
 
-        user.email
-          ? supabase
-              .from("events")
-              .select("*")
-              .eq("organizer_email", user.email)
-              .order("event_date", { ascending: false })
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-
-      if (ownedEventsRes.error) {
-        throw new Error(ownedEventsRes.error.message);
+      if (ownedEventsError) {
+        throw new Error(ownedEventsError.message);
       }
 
-      if (organiserEventsRes.error) {
-        throw new Error(organiserEventsRes.error.message);
-      }
+      const ownedEvents = (ownedEventsRows || []) as EventRow[];
+      setEvents(ownedEvents);
 
-      const mergedEvents = [
-        ...((ownedEventsRes.data || []) as EventRow[]),
-        ...((organiserEventsRes.data || []) as EventRow[]),
-      ];
-
-      const uniqueEventsMap = new Map<string, EventRow>();
-      for (const event of mergedEvents) {
-        uniqueEventsMap.set(event.id, event);
-      }
-
-      const eventsData = Array.from(uniqueEventsMap.values()).sort((a, b) => {
-        const aTime = a.event_date ? new Date(a.event_date).getTime() : 0;
-        const bTime = b.event_date ? new Date(b.event_date).getTime() : 0;
-        return bTime - aTime;
-      });
-
-      setEvents(eventsData);
+      const hasEvents = ownedEvents.length > 0;
+      setHasCreatedEvents(hasEvents);
 
       const organiserCheck =
-        eventsData.some(
+        ownedEvents.some(
           (event) =>
             event.creator_type?.toLowerCase() === "organiser" ||
-            event.organizer_email === user.email
+            event.creator_type?.toLowerCase() === "venue"
         ) || false;
 
-      setIsOrganiser(organiserCheck);
+      setIsOrganiser(organiserCheck || hasEvents);
 
-      if (eventsData.length === 0) {
+      if (!hasEvents) {
         setAnalytics({});
         return;
       }
 
-      const eventIds = eventsData.map((event) => event.id);
+      const eventIds = ownedEvents.map((event) => event.id);
 
       const { data: ticketTypeRows, error: ticketTypesError } = await supabase
         .from("ticket_types")
@@ -228,7 +228,7 @@ export default function DashboardPage() {
 
       const analyticsMap: Record<string, EventAnalytics> = {};
 
-      for (const event of eventsData) {
+      for (const event of ownedEvents) {
         const eventTicketTypes = ticketTypesByEvent[event.id] || [];
 
         const totalCapacity = eventTicketTypes.reduce((sum, ticketType) => {
@@ -336,7 +336,8 @@ export default function DashboardPage() {
       const { error: deleteEventError } = await supabase
         .from("events")
         .delete()
-        .eq("id", eventId);
+        .eq("id", eventId)
+        .eq("user_id", user.id);
 
       if (deleteEventError) {
         throw new Error(deleteEventError.message);
@@ -348,6 +349,27 @@ export default function DashboardPage() {
       alert(error instanceof Error ? error.message : "Failed to delete event");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handlePayoutChange = (field: keyof PayoutForm, value: string) => {
+    setPayoutForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSavePayouts = async () => {
+    try {
+      setPayoutSaving(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 700));
+
+      alert("Payout details saved. Next step is connecting this to your database.");
+    } catch (error) {
+      alert("Failed to save payout details");
+    } finally {
+      setPayoutSaving(false);
     }
   };
 
@@ -368,7 +390,7 @@ export default function DashboardPage() {
           </p>
           <h1 className="mt-3 text-[32px] font-extrabold">Log in required</h1>
           <p className="mt-3 text-sm text-white/70">
-            Log in or sign up to view your events dashboard.
+            Log in to access your organiser dashboard.
           </p>
 
           <div className="mt-6 flex justify-center gap-3">
@@ -393,7 +415,67 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
-        <p className="text-white/60">Loading dashboard...</p>
+        <p className="text-white/60">Loading organiser dashboard...</p>
+      </main>
+    );
+  }
+
+  if (!hasCreatedEvents) {
+    return (
+      <main className="min-h-screen bg-black text-white">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-12">
+          <div className="w-full border border-white/15 bg-white/[0.03] p-8 md:p-10">
+            <p className="text-[12px] uppercase tracking-[0.16em] text-white/50">
+              Swift Tickets
+            </p>
+            <h1 className="mt-3 text-[34px] font-extrabold tracking-[-0.03em] md:text-[46px]">
+              This dashboard is for organisers
+            </h1>
+            <p className="mt-4 max-w-2xl text-[15px] leading-7 text-white/70">
+              Your dashboard unlocks once you create your first event. Regular users
+              should have their own personal account page for profile details, tickets,
+              and saved activity.
+            </p>
+
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              <div className="border border-white/10 bg-black/30 p-5">
+                <p className="text-[12px] uppercase tracking-[0.12em] text-white/45">
+                  Organiser dashboard includes
+                </p>
+                <p className="mt-3 text-sm leading-7 text-white/75">
+                  Event analytics, ticket sales, payouts, event editing, scanner access,
+                  and organiser tools.
+                </p>
+              </div>
+
+              <div className="border border-white/10 bg-black/30 p-5">
+                <p className="text-[12px] uppercase tracking-[0.12em] text-white/45">
+                  Personal account should include
+                </p>
+                <p className="mt-3 text-sm leading-7 text-white/75">
+                  Bio, profile photo, contact details, tickets, resales, and account
+                  settings.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/create-event"
+                className="bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
+              >
+                Create Your First Event
+              </Link>
+
+              <Link
+                href="/"
+                className="border border-white/25 px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
+              >
+                Back Home
+              </Link>
+            </div>
+          </div>
+        </div>
       </main>
     );
   }
@@ -405,220 +487,444 @@ export default function DashboardPage() {
           <div className="bg-[linear-gradient(90deg,rgba(249,115,22,0.14),rgba(59,130,246,0.14))] px-6 py-6 md:px-8">
             <p className="mb-2 text-[15px] text-gray-200">By Swift Tickets</p>
             <h1 className="text-[40px] font-extrabold leading-[0.95] tracking-[-0.03em] md:text-[56px]">
-              Dashboard
+              Organiser Dashboard
             </h1>
             <p className="mt-2 text-[14px] text-white/75">
-              View your events, track ticket performance, and manage listings.
+              Manage your events, track sales, and set up your payouts.
             </p>
           </div>
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-4">
-          <div className="border border-white/15 bg-white/[0.03] p-5">
-            <p className="text-[11px] uppercase tracking-[0.14em] text-white/50">
-              Total Events
-            </p>
-            <p className="mt-3 text-[30px] font-extrabold">{totals.events}</p>
-          </div>
+        <div className="mb-8 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => setActiveSection("overview")}
+            className={`px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] transition ${
+              activeSection === "overview"
+                ? "bg-white text-black"
+                : "border border-white/25 text-white hover:bg-white hover:text-black"
+            }`}
+          >
+            Overview
+          </button>
 
-          <div className="border border-white/15 bg-white/[0.03] p-5">
-            <p className="text-[11px] uppercase tracking-[0.14em] text-white/50">
-              Tickets Sold
-            </p>
-            <p className="mt-3 text-[30px] font-extrabold">{totals.sold}</p>
-          </div>
-
-          <div className="border border-white/15 bg-white/[0.03] p-5">
-            <p className="text-[11px] uppercase tracking-[0.14em] text-white/50">
-              Tickets Left
-            </p>
-            <p className="mt-3 text-[30px] font-extrabold">{totals.left}</p>
-          </div>
-
-          <div className="border border-white/15 bg-white/[0.03] p-5">
-            <p className="text-[11px] uppercase tracking-[0.14em] text-white/50">
-              Gross Revenue
-            </p>
-            <p className="mt-3 text-[30px] font-extrabold">
-              {formatMoney(totals.revenue)}
-            </p>
-          </div>
-        </div>
-
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-[32px] font-extrabold tracking-[-0.03em]">
+          <button
+            type="button"
+            onClick={() => setActiveSection("events")}
+            className={`px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] transition ${
+              activeSection === "events"
+                ? "bg-white text-black"
+                : "border border-white/25 text-white hover:bg-white hover:text-black"
+            }`}
+          >
             My Events
-          </h2>
+          </button>
 
-          <div className="flex gap-3">
-            {isOrganiser && (
-              <Link
-                href="/scanner"
-                className="border border-white/25 px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
-              >
-                Scanner
-              </Link>
-            )}
+          <button
+            type="button"
+            onClick={() => setActiveSection("payouts")}
+            className={`px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] transition ${
+              activeSection === "payouts"
+                ? "bg-white text-black"
+                : "border border-white/25 text-white hover:bg-white hover:text-black"
+            }`}
+          >
+            Payouts
+          </button>
 
-            <button
-              type="button"
-              onClick={loadDashboard}
-              className="border border-white/25 px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
-            >
-              Refresh
-            </button>
-
+          {isOrganiser && (
             <Link
-              href="/create-event"
-              className="bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
+              href="/scanner"
+              className="border border-white/25 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
             >
-              Create Event
+              Scanner
             </Link>
-          </div>
+          )}
+
+          <Link
+            href="/create-event"
+            className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
+          >
+            Create Event
+          </Link>
         </div>
 
-        {events.length === 0 ? (
-          <div className="border border-white/15 bg-white/[0.03] p-10 text-center">
-            <h3 className="text-[26px] font-extrabold">No events yet</h3>
-            <p className="mt-3 text-white/65">
-              Create your first event to start selling tickets on Swift Tickets.
-            </p>
+        {activeSection === "overview" && (
+          <>
+            <div className="mb-8 grid gap-4 md:grid-cols-4">
+              <div className="border border-white/15 bg-white/[0.03] p-5">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/50">
+                  Total Events
+                </p>
+                <p className="mt-3 text-[30px] font-extrabold">{totals.events}</p>
+              </div>
 
-            <Link
-              href="/create-event"
-              className="mt-6 inline-block bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black"
-            >
-              Create Your First Event
-            </Link>
-          </div>
-        ) : (
-          <div className="grid gap-6">
-            {events.map((event) => {
-              const stats = analytics[event.id] || {
-                totalCapacity: 0,
-                ticketsSold: 0,
-                ticketsLeft: 0,
-                grossRevenue: 0,
-                ticketTypesCount: 0,
-              };
+              <div className="border border-white/15 bg-white/[0.03] p-5">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/50">
+                  Tickets Sold
+                </p>
+                <p className="mt-3 text-[30px] font-extrabold">{totals.sold}</p>
+              </div>
 
-              return (
-                <div
-                  key={event.id}
-                  className="grid gap-5 border border-white/15 bg-white/[0.03] p-5 lg:grid-cols-[220px_1fr]"
-                >
-                  <div className="relative aspect-[0.82] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)]">
-                    {event.image_url ? (
-                      <Image
-                        src={event.image_url}
-                        alt={event.title}
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
-                    )}
+              <div className="border border-white/15 bg-white/[0.03] p-5">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/50">
+                  Tickets Left
+                </p>
+                <p className="mt-3 text-[30px] font-extrabold">{totals.left}</p>
+              </div>
+
+              <div className="border border-white/15 bg-white/[0.03] p-5">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/50">
+                  Gross Revenue
+                </p>
+                <p className="mt-3 text-[30px] font-extrabold">
+                  {formatMoney(totals.revenue)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <h2 className="text-[28px] font-extrabold tracking-[-0.03em]">
+                  Quick summary
+                </h2>
+                <p className="mt-3 max-w-2xl text-[14px] leading-7 text-white/70">
+                  This dashboard now focuses only on organiser activity. Buyers should
+                  have their own personal account page, while this area stays focused on
+                  events, analytics, and payouts.
+                </p>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <div className="border border-white/10 bg-black/30 p-4">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                      Organiser status
+                    </p>
+                    <p className="mt-2 text-[20px] font-extrabold">
+                      {isOrganiser ? "Active" : "Pending"}
+                    </p>
                   </div>
 
-                  <div className="flex flex-col justify-between gap-6">
-                    <div>
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <span className="border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-white/70">
-                          {event.category || "Uncategorised"}
-                        </span>
+                  <div className="border border-white/10 bg-black/30 p-4">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                      Payout setup
+                    </p>
+                    <p className="mt-2 text-[20px] font-extrabold">
+                      Add details
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-                        {event.creator_type ? (
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <h2 className="text-[24px] font-extrabold tracking-[-0.03em]">
+                  Next step
+                </h2>
+                <p className="mt-3 text-[14px] leading-7 text-white/70">
+                  Add your payout details so Swift Tickets can later route event
+                  balances to the correct account.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("payouts")}
+                  className="mt-6 bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
+                >
+                  Set Up Payouts
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeSection === "events" && (
+          <>
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+              <h2 className="text-[32px] font-extrabold tracking-[-0.03em]">
+                My Events
+              </h2>
+
+              <button
+                type="button"
+                onClick={loadDashboard}
+                className="border border-white/25 px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
+              >
+                Refresh
+              </button>
+            </div>
+
+            <div className="grid gap-6">
+              {events.map((event) => {
+                const stats = analytics[event.id] || {
+                  totalCapacity: 0,
+                  ticketsSold: 0,
+                  ticketsLeft: 0,
+                  grossRevenue: 0,
+                  ticketTypesCount: 0,
+                };
+
+                return (
+                  <div
+                    key={event.id}
+                    className="grid gap-5 border border-white/15 bg-white/[0.03] p-5 lg:grid-cols-[220px_1fr]"
+                  >
+                    <div className="relative aspect-[0.82] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)]">
+                      {event.image_url ? (
+                        <Image
+                          src={event.image_url}
+                          alt={event.title}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
+                      )}
+                    </div>
+
+                    <div className="flex flex-col justify-between gap-6">
+                      <div>
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
                           <span className="border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-white/70">
-                            {event.creator_type}
+                            {event.category || "Uncategorised"}
                           </span>
+
+                          {event.creator_type ? (
+                            <span className="border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-white/70">
+                              {event.creator_type}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <h3 className="text-[28px] font-extrabold leading-tight tracking-[-0.03em]">
+                          {event.title}
+                        </h3>
+
+                        <p className="mt-2 text-[14px] text-white/70">
+                          {event.location || "Location coming soon"}
+                        </p>
+
+                        <p className="mt-1 text-[13px] text-white/50">
+                          {formatDate(event.event_date)}
+                        </p>
+
+                        {event.description ? (
+                          <p className="mt-4 max-w-3xl text-[14px] leading-6 text-white/65">
+                            {event.description}
+                          </p>
                         ) : null}
                       </div>
 
-                      <h3 className="text-[28px] font-extrabold leading-tight tracking-[-0.03em]">
-                        {event.title}
-                      </h3>
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <div className="border border-white/10 bg-black/30 p-4">
+                          <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                            Tickets Sold
+                          </p>
+                          <p className="mt-2 text-[24px] font-extrabold">
+                            {stats.ticketsSold}
+                          </p>
+                        </div>
 
-                      <p className="mt-2 text-[14px] text-white/70">
-                        {event.location || "Location coming soon"}
-                      </p>
+                        <div className="border border-white/10 bg-black/30 p-4">
+                          <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                            Tickets Left
+                          </p>
+                          <p className="mt-2 text-[24px] font-extrabold">
+                            {stats.ticketsLeft}
+                          </p>
+                        </div>
 
-                      <p className="mt-1 text-[13px] text-white/50">
-                        {formatDate(event.event_date)}
-                      </p>
+                        <div className="border border-white/10 bg-black/30 p-4">
+                          <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                            Capacity
+                          </p>
+                          <p className="mt-2 text-[24px] font-extrabold">
+                            {stats.totalCapacity}
+                          </p>
+                        </div>
 
-                      {event.description ? (
-                        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-white/65">
-                          {event.description}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <div className="border border-white/10 bg-black/30 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
-                          Tickets Sold
-                        </p>
-                        <p className="mt-2 text-[24px] font-extrabold">
-                          {stats.ticketsSold}
-                        </p>
+                        <div className="border border-white/10 bg-black/30 p-4">
+                          <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                            Revenue
+                          </p>
+                          <p className="mt-2 text-[24px] font-extrabold">
+                            {formatMoney(stats.grossRevenue)}
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="border border-white/10 bg-black/30 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
-                          Tickets Left
-                        </p>
-                        <p className="mt-2 text-[24px] font-extrabold">
-                          {stats.ticketsLeft}
-                        </p>
+                      <div className="flex flex-wrap gap-3">
+                        <Link
+                          href={`/events/${event.id}`}
+                          className="border border-white/25 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
+                        >
+                          View Event
+                        </Link>
+
+                        <Link
+                          href={`/edit-event/${event.id}`}
+                          className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
+                        >
+                          Edit Event / Tickets
+                        </Link>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEvent(event.id)}
+                          disabled={deletingId === event.id}
+                          className="border border-red-500/50 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-red-300 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deletingId === event.id ? "Deleting..." : "Delete"}
+                        </button>
                       </div>
-
-                      <div className="border border-white/10 bg-black/30 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
-                          Capacity
-                        </p>
-                        <p className="mt-2 text-[24px] font-extrabold">
-                          {stats.totalCapacity}
-                        </p>
-                      </div>
-
-                      <div className="border border-white/10 bg-black/30 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
-                          Revenue
-                        </p>
-                        <p className="mt-2 text-[24px] font-extrabold">
-                          {formatMoney(stats.grossRevenue)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <Link
-                        href={`/events/${event.id}`}
-                        className="border border-white/25 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
-                      >
-                        View Event
-                      </Link>
-
-                      <Link
-                        href={`/edit-event/${event.id}`}
-                        className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
-                      >
-                        Edit Event / Tickets
-                      </Link>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteEvent(event.id)}
-                        disabled={deletingId === event.id}
-                        className="border border-red-500/50 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-red-300 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {deletingId === event.id ? "Deleting..." : "Delete"}
-                      </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {activeSection === "payouts" && (
+          <div className="grid gap-6 lg:grid-cols-[1fr_0.75fr]">
+            <div className="border border-white/15 bg-white/[0.03] p-6">
+              <h2 className="text-[30px] font-extrabold tracking-[-0.03em]">
+                Payout Details
+              </h2>
+              <p className="mt-3 max-w-2xl text-[14px] leading-7 text-white/70">
+                Add the account details Swift Tickets should use for your event
+                payouts. This screen is the right place for organisers to manage
+                banking details.
+              </p>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Account Holder Name
+                  </label>
+                  <input
+                    value={payoutForm.account_holder_name}
+                    onChange={(e) =>
+                      handlePayoutChange("account_holder_name", e.target.value)
+                    }
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="Delwyn Manning"
+                  />
                 </div>
-              );
-            })}
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Business Name
+                  </label>
+                  <input
+                    value={payoutForm.business_name}
+                    onChange={(e) =>
+                      handlePayoutChange("business_name", e.target.value)
+                    }
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="Swift Events Pty Ltd"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Bank Name
+                  </label>
+                  <input
+                    value={payoutForm.bank_name}
+                    onChange={(e) =>
+                      handlePayoutChange("bank_name", e.target.value)
+                    }
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="FNB"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Account Number
+                  </label>
+                  <input
+                    value={payoutForm.account_number}
+                    onChange={(e) =>
+                      handlePayoutChange("account_number", e.target.value)
+                    }
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="12345678901"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Account Type
+                  </label>
+                  <input
+                    value={payoutForm.account_type}
+                    onChange={(e) =>
+                      handlePayoutChange("account_type", e.target.value)
+                    }
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="Cheque / Current"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Branch Code
+                  </label>
+                  <input
+                    value={payoutForm.branch_code}
+                    onChange={(e) =>
+                      handlePayoutChange("branch_code", e.target.value)
+                    }
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="250655"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSavePayouts}
+                disabled={payoutSaving}
+                className="mt-6 bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {payoutSaving ? "Saving..." : "Save Payout Details"}
+              </button>
+            </div>
+
+            <div className="border border-white/15 bg-white/[0.03] p-6">
+              <h2 className="text-[24px] font-extrabold tracking-[-0.03em]">
+                Payout Summary
+              </h2>
+
+              <div className="mt-6 grid gap-4">
+                <div className="border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                    Available Balance
+                  </p>
+                  <p className="mt-2 text-[24px] font-extrabold">R0.00</p>
+                </div>
+
+                <div className="border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                    Pending Balance
+                  </p>
+                  <p className="mt-2 text-[24px] font-extrabold">R0.00</p>
+                </div>
+
+                <div className="border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                    Verification Status
+                  </p>
+                  <p className="mt-2 text-[24px] font-extrabold">Pending setup</p>
+                </div>
+              </div>
+
+              <p className="mt-6 text-[13px] leading-7 text-white/65">
+                This is the right place to later add real payout tracking,
+                verification, and bank transfer status once the payout backend is
+                connected.
+              </p>
+            </div>
           </div>
         )}
       </div>
