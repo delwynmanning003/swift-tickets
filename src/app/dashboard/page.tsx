@@ -47,6 +47,7 @@ type PayoutForm = {
   account_number: string;
   account_type: string;
   branch_code: string;
+  verification_status: string;
 };
 
 const SOLD_STATUSES = new Set([
@@ -108,8 +109,10 @@ export default function DashboardPage() {
     account_number: "",
     account_type: "",
     branch_code: "",
+    verification_status: "pending setup",
   });
 
+  const [payoutLoading, setPayoutLoading] = useState(false);
   const [payoutSaving, setPayoutSaving] = useState(false);
 
   useEffect(() => {
@@ -133,6 +136,42 @@ export default function DashboardPage() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const loadPayoutProfile = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      setPayoutLoading(true);
+
+      const { data, error } = await supabase
+        .from("organizer_profiles")
+        .select(
+          "account_holder_name, business_name, bank_name, account_number, account_type, branch_code, verification_status"
+        )
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data) {
+        setPayoutForm({
+          account_holder_name: data.account_holder_name || "",
+          business_name: data.business_name || "",
+          bank_name: data.bank_name || "",
+          account_number: data.account_number || "",
+          account_type: data.account_type || "",
+          branch_code: data.branch_code || "",
+          verification_status: data.verification_status || "pending setup",
+        });
+      }
+    } catch (error) {
+      console.error("Load payout profile error:", error);
+    } finally {
+      setPayoutLoading(false);
+    }
+  }, [user]);
 
   const loadDashboard = useCallback(async () => {
     if (!user?.id) {
@@ -276,6 +315,12 @@ export default function DashboardPage() {
     }
   }, [checkingAuth, loadDashboard]);
 
+  useEffect(() => {
+    if (user?.id) {
+      loadPayoutProfile();
+    }
+  }, [user, loadPayoutProfile]);
+
   const totals = useMemo(() => {
     return events.reduce(
       (acc, event) => {
@@ -360,14 +405,34 @@ export default function DashboardPage() {
   };
 
   const handleSavePayouts = async () => {
+    if (!user?.id) return;
+
     try {
       setPayoutSaving(true);
 
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      const payload = {
+        user_id: user.id,
+        account_holder_name: payoutForm.account_holder_name.trim(),
+        business_name: payoutForm.business_name.trim(),
+        bank_name: payoutForm.bank_name.trim(),
+        account_number: payoutForm.account_number.trim(),
+        account_type: payoutForm.account_type.trim(),
+        branch_code: payoutForm.branch_code.trim(),
+      };
 
-      alert("Payout details saved. Next step is connecting this to your database.");
+      const { error } = await supabase
+        .from("organizer_profiles")
+        .upsert(payload, { onConflict: "user_id" });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      await loadPayoutProfile();
+      alert("Payout details saved successfully.");
     } catch (error) {
-      alert("Failed to save payout details");
+      console.error("Save payouts error:", error);
+      alert(error instanceof Error ? error.message : "Failed to save payout details");
     } finally {
       setPayoutSaving(false);
     }
@@ -432,29 +497,26 @@ export default function DashboardPage() {
               This dashboard is for organisers
             </h1>
             <p className="mt-4 max-w-2xl text-[15px] leading-7 text-white/70">
-              Your dashboard unlocks once you create your first event. Regular users
-              should have their own personal account page for profile details, tickets,
-              and saved activity.
+              Create your first event to unlock organiser tools, event analytics,
+              scanner access, and payout setup.
             </p>
 
             <div className="mt-8 grid gap-4 md:grid-cols-2">
               <div className="border border-white/10 bg-black/30 p-5">
                 <p className="text-[12px] uppercase tracking-[0.12em] text-white/45">
-                  Organiser dashboard includes
+                  Organiser tools
                 </p>
                 <p className="mt-3 text-sm leading-7 text-white/75">
-                  Event analytics, ticket sales, payouts, event editing, scanner access,
-                  and organiser tools.
+                  Event analytics, ticket sales, payouts, event editing, and scanner access.
                 </p>
               </div>
 
               <div className="border border-white/10 bg-black/30 p-5">
                 <p className="text-[12px] uppercase tracking-[0.12em] text-white/45">
-                  Personal account should include
+                  Next step
                 </p>
                 <p className="mt-3 text-sm leading-7 text-white/75">
-                  Bio, profile photo, contact details, tickets, resales, and account
-                  settings.
+                  Publish your first event, then come back here to manage everything in one place.
                 </p>
               </div>
             </div>
@@ -490,7 +552,7 @@ export default function DashboardPage() {
               Organiser Dashboard
             </h1>
             <p className="mt-2 text-[14px] text-white/75">
-              Manage your events, track sales, and set up your payouts.
+              Manage events, track sales, and control payouts from one place.
             </p>
           </div>
         </div>
@@ -586,18 +648,17 @@ export default function DashboardPage() {
             <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
               <div className="border border-white/15 bg-white/[0.03] p-6">
                 <h2 className="text-[28px] font-extrabold tracking-[-0.03em]">
-                  Quick summary
+                  Performance Snapshot
                 </h2>
                 <p className="mt-3 max-w-2xl text-[14px] leading-7 text-white/70">
-                  This dashboard now focuses only on organiser activity. Buyers should
-                  have their own personal account page, while this area stays focused on
-                  events, analytics, and payouts.
+                  A live view of your organiser activity across events, ticket sales,
+                  capacity, and revenue.
                 </p>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
                   <div className="border border-white/10 bg-black/30 p-4">
                     <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
-                      Organiser status
+                      Organiser Status
                     </p>
                     <p className="mt-2 text-[20px] font-extrabold">
                       {isOrganiser ? "Active" : "Pending"}
@@ -606,10 +667,10 @@ export default function DashboardPage() {
 
                   <div className="border border-white/10 bg-black/30 p-4">
                     <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
-                      Payout setup
+                      Payout Profile
                     </p>
                     <p className="mt-2 text-[20px] font-extrabold">
-                      Add details
+                      {payoutForm.account_holder_name ? "Configured" : "Incomplete"}
                     </p>
                   </div>
                 </div>
@@ -617,11 +678,11 @@ export default function DashboardPage() {
 
               <div className="border border-white/15 bg-white/[0.03] p-6">
                 <h2 className="text-[24px] font-extrabold tracking-[-0.03em]">
-                  Next step
+                  Action Required
                 </h2>
                 <p className="mt-3 text-[14px] leading-7 text-white/70">
-                  Add your payout details so Swift Tickets can later route event
-                  balances to the correct account.
+                  Complete your payout profile so your organiser account is ready
+                  for future settlement and verification workflows.
                 </p>
 
                 <button
@@ -629,7 +690,7 @@ export default function DashboardPage() {
                   onClick={() => setActiveSection("payouts")}
                   className="mt-6 bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
                 >
-                  Set Up Payouts
+                  Open Payouts
                 </button>
               </div>
             </div>
@@ -790,9 +851,7 @@ export default function DashboardPage() {
                 Payout Details
               </h2>
               <p className="mt-3 max-w-2xl text-[14px] leading-7 text-white/70">
-                Add the account details Swift Tickets should use for your event
-                payouts. This screen is the right place for organisers to manage
-                banking details.
+                Add the account details Swift Tickets should use for your event payouts.
               </p>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -806,7 +865,7 @@ export default function DashboardPage() {
                       handlePayoutChange("account_holder_name", e.target.value)
                     }
                     className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
-                    placeholder="Delwyn Manning"
+                    placeholder="Account holder name"
                   />
                 </div>
 
@@ -820,7 +879,7 @@ export default function DashboardPage() {
                       handlePayoutChange("business_name", e.target.value)
                     }
                     className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
-                    placeholder="Swift Events Pty Ltd"
+                    placeholder="Business name"
                   />
                 </div>
 
@@ -834,7 +893,7 @@ export default function DashboardPage() {
                       handlePayoutChange("bank_name", e.target.value)
                     }
                     className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
-                    placeholder="FNB"
+                    placeholder="Bank name"
                   />
                 </div>
 
@@ -848,7 +907,7 @@ export default function DashboardPage() {
                       handlePayoutChange("account_number", e.target.value)
                     }
                     className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
-                    placeholder="12345678901"
+                    placeholder="Account number"
                   />
                 </div>
 
@@ -856,14 +915,19 @@ export default function DashboardPage() {
                   <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
                     Account Type
                   </label>
-                  <input
+                  <select
                     value={payoutForm.account_type}
                     onChange={(e) =>
                       handlePayoutChange("account_type", e.target.value)
                     }
                     className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
-                    placeholder="Cheque / Current"
-                  />
+                  >
+                    <option value="">Select account type</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Current">Current</option>
+                    <option value="Savings">Savings</option>
+                    <option value="Business">Business</option>
+                  </select>
                 </div>
 
                 <div>
@@ -876,7 +940,7 @@ export default function DashboardPage() {
                       handlePayoutChange("branch_code", e.target.value)
                     }
                     className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
-                    placeholder="250655"
+                    placeholder="Branch code"
                   />
                 </div>
               </div>
@@ -884,7 +948,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={handleSavePayouts}
-                disabled={payoutSaving}
+                disabled={payoutSaving || payoutLoading}
                 className="mt-6 bg-white px-6 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {payoutSaving ? "Saving..." : "Save Payout Details"}
@@ -915,14 +979,16 @@ export default function DashboardPage() {
                   <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
                     Verification Status
                   </p>
-                  <p className="mt-2 text-[24px] font-extrabold">Pending setup</p>
+                  <p className="mt-2 text-[24px] font-extrabold">
+                    {payoutLoading
+                      ? "Loading..."
+                      : payoutForm.verification_status || "Pending setup"}
+                  </p>
                 </div>
               </div>
 
               <p className="mt-6 text-[13px] leading-7 text-white/65">
-                This is the right place to later add real payout tracking,
-                verification, and bank transfer status once the payout backend is
-                connected.
+                Your payout profile is linked to your organiser account and can be updated anytime.
               </p>
             </div>
           </div>
