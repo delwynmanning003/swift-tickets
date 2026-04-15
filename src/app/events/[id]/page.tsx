@@ -6,6 +6,26 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+type ActiveTab = "tickets" | "about" | "venue";
+
+function getBuyerTicketPrice(basePrice: number, feeOption?: string | null) {
+  if (basePrice <= 0) return 0;
+
+  if (feeOption === "buyer_pays_all") {
+    return basePrice + 3 + basePrice * 0.04;
+  }
+
+  if (feeOption === "split") {
+    return basePrice + basePrice * 0.04;
+  }
+
+  return basePrice;
+}
+
+function formatMoney(amount: number) {
+  return `R${amount.toFixed(2)}`;
+}
+
 export default function EventPage() {
   const params = useParams();
   const id = params.id as string;
@@ -13,9 +33,10 @@ export default function EventPage() {
   const [event, setEvent] = useState<any>(null);
   const [ticketTypes, setTicketTypes] = useState<any[]>([]);
   const [resaleTickets, setResaleTickets] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"tickets" | "venue">("tickets");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("tickets");
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
 
   useEffect(() => {
     const handleResize = () => {
@@ -76,7 +97,7 @@ export default function EventPage() {
 
       setEvent(eventRow);
       setTicketTypes(ticketRows || []);
-      setResaleTickets(resaleEnriched.filter(Boolean) as any[]);
+      setResaleTickets((resaleEnriched.filter(Boolean) as any[]) || []);
       setLoading(false);
     };
 
@@ -84,15 +105,19 @@ export default function EventPage() {
   }, [id]);
 
   const lowestPrice = useMemo(() => {
-    const normalPrices = ticketTypes.map((t) => Number(t.price || 0));
-    const resalePrices = resaleTickets.map((r: any) =>
-      Number(r.resale?.resale_price || 0)
-    );
-    const all = [...normalPrices, ...resalePrices].filter((n) => n >= 0);
+    const normalPrices = ticketTypes
+      .map((t) => getBuyerTicketPrice(Number(t.price || 0), event?.fee_option))
+      .filter((n) => !Number.isNaN(n) && n >= 0);
+
+    const resalePrices = resaleTickets
+      .map((r: any) => Number(r.resale?.resale_price || 0))
+      .filter((n) => !Number.isNaN(n) && n >= 0);
+
+    const all = [...normalPrices, ...resalePrices];
 
     if (all.length === 0) return null;
     return Math.min(...all);
-  }, [ticketTypes, resaleTickets]);
+  }, [ticketTypes, resaleTickets, event]);
 
   const formattedDate = useMemo(() => {
     if (!event?.event_date) return "";
@@ -111,6 +136,30 @@ export default function EventPage() {
       minute: "2-digit",
     });
   }, [event]);
+
+  const handleShare = async () => {
+    try {
+      const url = typeof window !== "undefined" ? window.location.href : "";
+
+      if (!url) return;
+
+      if (navigator.share) {
+        await navigator.share({
+          title: event?.title || "Swift Tickets Event",
+          text: `Check out ${event?.title || "this event"} on Swift Tickets`,
+          url,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(url);
+      setShareMessage("Link copied");
+      setTimeout(() => setShareMessage(""), 2200);
+    } catch {
+      setShareMessage("Could not share link");
+      setTimeout(() => setShareMessage(""), 2200);
+    }
+  };
 
   if (loading) {
     return (
@@ -289,7 +338,20 @@ export default function EventPage() {
                 style={{ objectFit: "contain" }}
               />
 
-              <div style={{ width: 28 }} />
+              <button
+                type="button"
+                onClick={handleShare}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "white",
+                  fontSize: 18,
+                  cursor: "pointer",
+                  lineHeight: 1,
+                }}
+              >
+                ⤴
+              </button>
             </div>
 
             <div
@@ -372,6 +434,47 @@ export default function EventPage() {
               </button>
             </div>
 
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              {event.category ? (
+                <span
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    padding: "7px 12px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    textTransform: "uppercase",
+                    color: "#e5e7eb",
+                  }}
+                >
+                  {event.category}
+                </span>
+              ) : null}
+
+              {lowestPrice !== null ? (
+                <span
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    padding: "7px 12px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    textTransform: "uppercase",
+                    color: "#e5e7eb",
+                  }}
+                >
+                  {lowestPrice === 0 ? "FREE" : `FROM ${formatMoney(lowestPrice)}`}
+                </span>
+              ) : null}
+            </div>
+
             <p
               style={{
                 margin: "0 0 2px",
@@ -393,19 +496,50 @@ export default function EventPage() {
               {event.city || "Johannesburg"}, ZA
             </p>
 
-            <a
-              href="#"
+            <div
               style={{
-                color: "#8b5cf6",
-                textDecoration: "underline",
-                fontWeight: 600,
-                fontSize: 13,
-                display: "inline-block",
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
                 marginBottom: 28,
+                flexWrap: "wrap",
               }}
             >
-              GOT A CODE?
-            </a>
+              <a
+                href="#"
+                style={{
+                  color: "#8b5cf6",
+                  textDecoration: "underline",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  display: "inline-block",
+                }}
+              >
+                GOT A CODE?
+              </a>
+
+              <button
+                type="button"
+                onClick={handleShare}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  color: "white",
+                  padding: "8px 12px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                SHARE EVENT
+              </button>
+
+              {shareMessage ? (
+                <span style={{ fontSize: 12, color: "#d1d5db" }}>
+                  {shareMessage}
+                </span>
+              ) : null}
+            </div>
 
             <div
               style={{
@@ -432,6 +566,25 @@ export default function EventPage() {
                 }}
               >
                 TICKETS
+              </button>
+
+              <button
+                onClick={() => setActiveTab("about")}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: activeTab === "about" ? "white" : "#9ca3af",
+                  padding: "0 0 14px",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  borderBottom:
+                    activeTab === "about"
+                      ? "2px solid white"
+                      : "2px solid transparent",
+                }}
+              >
+                ABOUT
               </button>
 
               <button
@@ -468,80 +621,100 @@ export default function EventPage() {
                 </h2>
 
                 <div style={{ display: "grid", gap: 16 }}>
-                  {ticketTypes.map((ticket: any) => (
-                    <Link
-                      key={ticket.id}
-                      href={`/checkout/${ticket.id}`}
-                      style={{
-                        textDecoration: "none",
-                        color: "white",
-                      }}
-                    >
-                      <div
+                  {ticketTypes.map((ticket: any) => {
+                    const buyerPrice = getBuyerTicketPrice(
+                      Number(ticket.price || 0),
+                      event?.fee_option
+                    );
+
+                    return (
+                      <Link
+                        key={ticket.id}
+                        href={`/checkout/${ticket.id}`}
                         style={{
-                          border: "1px solid rgba(255,255,255,0.6)",
-                          padding: "22px 20px",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 18,
+                          textDecoration: "none",
+                          color: "white",
                         }}
                       >
                         <div
                           style={{
+                            border: "1px solid rgba(255,255,255,0.6)",
+                            padding: "22px 20px",
                             display: "flex",
-                            alignItems: "flex-start",
-                            justifyContent: "space-between",
-                            gap: 16,
+                            flexDirection: "column",
+                            gap: 18,
                           }}
                         >
-                          <div style={{ flex: 1 }}>
-                            <h3
-                              style={{
-                                margin: "0 0 10px",
-                                fontSize: 18,
-                                lineHeight: 1.2,
-                                fontWeight: 700,
-                              }}
-                            >
-                              {ticket.name}
-                            </h3>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-start",
+                              justifyContent: "space-between",
+                              gap: 16,
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <h3
+                                style={{
+                                  margin: "0 0 10px",
+                                  fontSize: 18,
+                                  lineHeight: 1.2,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {ticket.name}
+                              </h3>
 
-                            <p
+                              <p
+                                style={{
+                                  margin: "0 0 10px",
+                                  color: "#e5e7eb",
+                                  fontSize: 13,
+                                  lineHeight: 1.55,
+                                }}
+                              >
+                                {ticket.description || "General event access."}
+                              </p>
+
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#9ca3af",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                  letterSpacing: 0.8,
+                                }}
+                              >
+                                {buyerPrice === 0
+                                  ? "No extra fees"
+                                  : "Includes all fees"}
+                              </p>
+                            </div>
+
+                            <div
                               style={{
-                                margin: 0,
-                                color: "#e5e7eb",
-                                fontSize: 13,
-                                lineHeight: 1.55,
+                                fontSize: 22,
+                                lineHeight: 1,
+                                color: "white",
                               }}
                             >
-                              {ticket.description || "General event access."}
-                            </p>
+                              ↗
+                            </div>
                           </div>
 
                           <div
                             style={{
-                              fontSize: 22,
-                              lineHeight: 1,
-                              color: "white",
+                              fontSize: 18,
+                              fontWeight: 800,
                             }}
                           >
-                            ↗
+                            {buyerPrice === 0 ? "FREE" : formatMoney(buyerPrice)}
                           </div>
                         </div>
-
-                        <div
-                          style={{
-                            fontSize: 18,
-                            fontWeight: 800,
-                          }}
-                        >
-                          {Number(ticket.price) === 0
-                            ? "FREE"
-                            : `R${Number(ticket.price).toFixed(2)}`}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
+                      </Link>
+                    );
+                  })}
 
                   {resaleTickets.map((item: any) => (
                     <Link
@@ -584,7 +757,7 @@ export default function EventPage() {
 
                             <p
                               style={{
-                                margin: 0,
+                                margin: "0 0 10px",
                                 color: "#e5e7eb",
                                 fontSize: 13,
                                 lineHeight: 1.55,
@@ -592,6 +765,19 @@ export default function EventPage() {
                             >
                               Verified fan-to-fan resale ticket bought through
                               Swift Tickets.
+                            </p>
+
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#fdba74",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: 0.8,
+                              }}
+                            >
+                              Resale listing
                             </p>
                           </div>
 
@@ -613,11 +799,43 @@ export default function EventPage() {
                             color: "#fdba74",
                           }}
                         >
-                          R{Number(item.resale.resale_price).toFixed(2)}
+                          {formatMoney(Number(item.resale.resale_price || 0))}
                         </div>
                       </div>
                     </Link>
                   ))}
+                </div>
+              </div>
+            ) : activeTab === "about" ? (
+              <div>
+                <h2
+                  style={{
+                    margin: "0 0 20px",
+                    fontSize: 26,
+                    fontWeight: 800,
+                    letterSpacing: "-0.6px",
+                  }}
+                >
+                  About
+                </h2>
+
+                <div
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    padding: 20,
+                    lineHeight: 1.7,
+                  }}
+                >
+                  <p
+                    style={{
+                      color: "#e5e7eb",
+                      fontSize: 14,
+                      margin: 0,
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {event.description || "More event details coming soon."}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -648,13 +866,10 @@ export default function EventPage() {
                       color: "#d1d5db",
                       fontSize: 14,
                       marginTop: 0,
-                      marginBottom: 12,
+                      marginBottom: 0,
                     }}
                   >
                     {event.city || "Johannesburg"}, South Africa
-                  </p>
-                  <p style={{ color: "#e5e7eb", fontSize: 14, margin: 0 }}>
-                    {event.description || "Venue details coming soon."}
                   </p>
                 </div>
               </div>
@@ -712,7 +927,7 @@ export default function EventPage() {
                           color: "#e5e7eb",
                         }}
                       >
-                        Live event
+                        {event.category || "Live event"}
                       </p>
                       <h2
                         style={{
@@ -728,6 +943,47 @@ export default function EventPage() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  marginBottom: 12,
+                }}
+              >
+                {event.category ? (
+                  <span
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      padding: "7px 12px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 1,
+                      textTransform: "uppercase",
+                      color: "#e5e7eb",
+                    }}
+                  >
+                    {event.category}
+                  </span>
+                ) : null}
+
+                {lowestPrice !== null ? (
+                  <span
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      padding: "7px 12px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 1,
+                      textTransform: "uppercase",
+                      color: "#e5e7eb",
+                    }}
+                  >
+                    {lowestPrice === 0 ? "FREE" : `FROM ${formatMoney(lowestPrice)}`}
+                  </span>
+                ) : null}
               </div>
 
               <h3
@@ -750,17 +1006,55 @@ export default function EventPage() {
                 {event.city || "Johannesburg"}, ZA
               </p>
 
-              <a
-                href="#"
+              <div
                 style={{
-                  color: "#8b5cf6",
-                  textDecoration: "underline",
-                  fontWeight: 600,
-                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginBottom: 18,
                 }}
               >
-                GOT A CODE?
-              </a>
+                <a
+                  href="#"
+                  style={{
+                    color: "#8b5cf6",
+                    textDecoration: "underline",
+                    fontWeight: 600,
+                    fontSize: 12,
+                  }}
+                >
+                  GOT A CODE?
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    color: "white",
+                    padding: "8px 12px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  SHARE EVENT
+                </button>
+              </div>
+
+              {shareMessage ? (
+                <p
+                  style={{
+                    margin: "0 0 20px",
+                    fontSize: 12,
+                    color: "#d1d5db",
+                  }}
+                >
+                  {shareMessage}
+                </p>
+              ) : null}
             </div>
 
             <div>
@@ -866,19 +1160,34 @@ export default function EventPage() {
                   marginBottom: 24,
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 700,
-                    letterSpacing: "-0.5px",
-                  }}
-                >
-                  TICKETS FROM{" "}
-                  {lowestPrice !== null
-                    ? lowestPrice === 0
-                      ? "FREE"
-                      : `R${lowestPrice.toFixed(2)}`
-                    : "N/A"}
+                <div>
+                  <div
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 700,
+                      letterSpacing: "-0.5px",
+                    }}
+                  >
+                    TICKETS FROM{" "}
+                    {lowestPrice !== null
+                      ? lowestPrice === 0
+                        ? "FREE"
+                        : formatMoney(lowestPrice)
+                      : "N/A"}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.8,
+                      color: "#4b5563",
+                    }}
+                  >
+                    {lowestPrice === 0 ? "No extra fees" : "Includes all fees"}
+                  </div>
                 </div>
 
                 <button
@@ -925,6 +1234,25 @@ export default function EventPage() {
                 </button>
 
                 <button
+                  onClick={() => setActiveTab("about")}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: activeTab === "about" ? "white" : "#9ca3af",
+                    padding: "0 0 12px",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    borderBottom:
+                      activeTab === "about"
+                        ? "2px solid white"
+                        : "2px solid transparent",
+                  }}
+                >
+                  ABOUT
+                </button>
+
+                <button
                   onClick={() => setActiveTab("venue")}
                   style={{
                     background: "transparent",
@@ -958,61 +1286,82 @@ export default function EventPage() {
                   </h2>
 
                   <div style={{ display: "grid", gap: 16 }}>
-                    {ticketTypes.map((ticket: any) => (
-                      <Link
-                        key={ticket.id}
-                        href={`/checkout/${ticket.id}`}
-                        style={{
-                          textDecoration: "none",
-                          color: "white",
-                        }}
-                      >
-                        <div
+                    {ticketTypes.map((ticket: any) => {
+                      const buyerPrice = getBuyerTicketPrice(
+                        Number(ticket.price || 0),
+                        event?.fee_option
+                      );
+
+                      return (
+                        <Link
+                          key={ticket.id}
+                          href={`/checkout/${ticket.id}`}
                           style={{
-                            border: "1px solid rgba(255,255,255,0.75)",
-                            padding: "22px 24px",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 20,
+                            textDecoration: "none",
+                            color: "white",
                           }}
                         >
-                          <div>
-                            <h3
+                          <div
+                            style={{
+                              border: "1px solid rgba(255,255,255,0.75)",
+                              padding: "22px 24px",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: 20,
+                            }}
+                          >
+                            <div>
+                              <h3
+                                style={{
+                                  margin: "0 0 8px",
+                                  fontSize: 18,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {ticket.name}
+                              </h3>
+                              <p
+                                style={{
+                                  margin: "0 0 8px",
+                                  color: "#e5e7eb",
+                                  fontSize: 11,
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                {ticket.description || "General event access."}
+                              </p>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#9ca3af",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                  letterSpacing: 0.8,
+                                }}
+                              >
+                                {buyerPrice === 0
+                                  ? "No extra fees"
+                                  : "Includes all fees"}
+                              </p>
+                            </div>
+
+                            <div
                               style={{
-                                margin: "0 0 8px",
-                                fontSize: 18,
+                                whiteSpace: "nowrap",
+                                fontSize: 16,
                                 fontWeight: 700,
                               }}
                             >
-                              {ticket.name}
-                            </h3>
-                            <p
-                              style={{
-                                margin: 0,
-                                color: "#e5e7eb",
-                                fontSize: 11,
-                                lineHeight: 1.5,
-                              }}
-                            >
-                              {ticket.description || "General event access."}
-                            </p>
+                              {buyerPrice === 0
+                                ? "FREE →"
+                                : `${formatMoney(buyerPrice)} →`}
+                            </div>
                           </div>
-
-                          <div
-                            style={{
-                              whiteSpace: "nowrap",
-                              fontSize: 16,
-                              fontWeight: 700,
-                            }}
-                          >
-                            {Number(ticket.price) === 0
-                              ? "FREE →"
-                              : `R${Number(ticket.price).toFixed(2)} →`}
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
+                        </Link>
+                      );
+                    })}
 
                     {resaleTickets.map((item: any) => (
                       <Link
@@ -1046,7 +1395,7 @@ export default function EventPage() {
                             </h3>
                             <p
                               style={{
-                                margin: 0,
+                                margin: "0 0 8px",
                                 color: "#e5e7eb",
                                 fontSize: 12,
                                 lineHeight: 1.5,
@@ -1054,6 +1403,18 @@ export default function EventPage() {
                             >
                               Verified fan-to-fan resale ticket bought through
                               Swift Tickets.
+                            </p>
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#fdba74",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: 0.8,
+                              }}
+                            >
+                              Resale listing
                             </p>
                           </div>
 
@@ -1065,11 +1426,43 @@ export default function EventPage() {
                               color: "#fdba74",
                             }}
                           >
-                            R{Number(item.resale.resale_price).toFixed(2)} →
+                            {formatMoney(Number(item.resale.resale_price || 0))} →
                           </div>
                         </div>
                       </Link>
                     ))}
+                  </div>
+                </div>
+              ) : activeTab === "about" ? (
+                <div>
+                  <h2
+                    style={{
+                      margin: "0 0 20px",
+                      fontSize: 40,
+                      fontWeight: 800,
+                      letterSpacing: "-1px",
+                    }}
+                  >
+                    About
+                  </h2>
+
+                  <div
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      padding: 24,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    <p
+                      style={{
+                        color: "#e5e7eb",
+                        fontSize: 14,
+                        margin: 0,
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {event.description || "More event details coming soon."}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -1095,11 +1488,8 @@ export default function EventPage() {
                     <p style={{ marginTop: 0, fontSize: 16 }}>
                       <strong>{event.location}</strong>
                     </p>
-                    <p style={{ color: "#d1d5db", fontSize: 15 }}>
+                    <p style={{ color: "#d1d5db", fontSize: 15, margin: 0 }}>
                       {event.city || "Johannesburg"}, South Africa
-                    </p>
-                    <p style={{ color: "#e5e7eb", fontSize: 14 }}>
-                      {event.description || "Venue details coming soon."}
                     </p>
                   </div>
                 </div>
@@ -1140,9 +1530,23 @@ export default function EventPage() {
               {lowestPrice !== null
                 ? lowestPrice === 0
                   ? "FREE"
-                  : `R${lowestPrice.toFixed(2)}`
+                  : formatMoney(lowestPrice)
                 : "N/A"}
             </button>
+
+            <div
+              style={{
+                marginTop: 6,
+                textAlign: "center",
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: 0.8,
+                color: "#9ca3af",
+              }}
+            >
+              {lowestPrice === 0 ? "No extra fees" : "Includes all fees"}
+            </div>
           </div>
         )}
       </div>
