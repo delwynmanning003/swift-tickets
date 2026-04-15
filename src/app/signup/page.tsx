@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
@@ -82,38 +83,28 @@ export default function SignupPage() {
       : "/login";
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#070707",
-        position: "relative",
-        overflow: "hidden",
-        fontFamily:
-          'ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Helvetica Neue", Arial, sans-serif',
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "radial-gradient(circle at top, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.15) 20%, rgba(0,0,0,0.88) 58%, #000 100%)",
-        }}
-      />
-
-      <div className="signup-decor-left-arc" />
-      <div className="signup-decor-right-arc" />
-      <div className="signup-decor-left-bar" />
-      <div className="signup-decor-right-bar" />
+    <main className="signup-page">
+      <div className="signup-bg" />
+      <div className="signup-glow signup-glow-left" />
+      <div className="signup-glow signup-glow-right" />
+      <div className="signup-grid-overlay" />
 
       <div className="signup-shell">
         <div className="signup-card">
           <div className="signup-logo-wrap">
-            <img
+            <Image
               src="/logo.svg"
               alt="Swift Tickets"
+              width={170}
+              height={56}
               className="signup-logo"
+              priority
             />
+          </div>
+
+          <div className="signup-heading">
+            <h1>Create your account</h1>
+            <p>Join Swift Tickets to buy, sell and manage your event experience.</p>
           </div>
 
           <div className="signup-switcher">
@@ -131,7 +122,7 @@ export default function SignupPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="isabella.swan@example.com"
+                placeholder="Enter your email"
                 className="signup-input"
               />
             </div>
@@ -142,7 +133,7 @@ export default function SignupPage() {
                 <input
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Isabella"
+                  placeholder="First name"
                   className="signup-input"
                 />
               </div>
@@ -152,20 +143,20 @@ export default function SignupPage() {
                 <input
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Swan"
+                  placeholder="Last name"
                   className="signup-input"
                 />
               </div>
             </div>
 
             <div className="signup-field signup-password-field">
-              <div style={{ flex: 1 }}>
+              <div className="signup-password-inner">
                 <div className="signup-label">Password</div>
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder="Create a password"
                   className="signup-input"
                 />
               </div>
@@ -181,7 +172,7 @@ export default function SignupPage() {
                   height="22"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#111111"
+                  stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -199,7 +190,7 @@ export default function SignupPage() {
               </div>
 
               <div className="signup-phone-field">
-                <div className="signup-label">Phone number (Optional)</div>
+                <div className="signup-label">Phone number (optional)</div>
                 <input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -217,13 +208,13 @@ export default function SignupPage() {
                 className="signup-checkbox"
               />
               <span>
-                By checking this box, you agree to our{" "}
-                <a href="#" className="signup-link">
+                By creating an account, you agree to our{" "}
+                <a href="/terms" className="signup-link">
                   Terms of Use
-                </a>
-                , and acknowledge having read our{" "}
-                <a href="#" className="signup-link">
-                  Privacy Notice
+                </a>{" "}
+                and acknowledge our{" "}
+                <a href="/privacy" className="signup-link">
+                  Privacy Policy
                 </a>
                 .
               </span>
@@ -241,6 +232,64 @@ export default function SignupPage() {
       </div>
 
       <style jsx>{`
+        .signup-page {
+          min-height: 100vh;
+          background: #050505;
+          position: relative;
+          overflow: hidden;
+          font-family:
+            ui-sans-serif,
+            -apple-system,
+            BlinkMacSystemFont,
+            "SF Pro Display",
+            "Inter",
+            "Helvetica Neue",
+            Arial,
+            sans-serif;
+        }
+
+        .signup-bg {
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at top, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.15) 18%, rgba(0, 0, 0, 0.9) 55%, #000 100%);
+        }
+
+        .signup-glow {
+          position: absolute;
+          width: 420px;
+          height: 420px;
+          border-radius: 999px;
+          filter: blur(110px);
+          opacity: 0.22;
+          pointer-events: none;
+        }
+
+        .signup-glow-left {
+          left: -120px;
+          top: 120px;
+          background: #f97316;
+        }
+
+        .signup-glow-right {
+          right: -120px;
+          top: 100px;
+          background: #3b82f6;
+        }
+
+        .signup-grid-overlay {
+          position: absolute;
+          inset: 0;
+          background-image: linear-gradient(
+              rgba(255, 255, 255, 0.025) 1px,
+              transparent 1px
+            ),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+          background-size: 38px 38px;
+          mask-image: radial-gradient(circle at center, black 35%, transparent 95%);
+          opacity: 0.28;
+        }
+
         .signup-shell {
           position: relative;
           z-index: 2;
@@ -248,39 +297,60 @@ export default function SignupPage() {
           display: flex;
           justify-content: center;
           align-items: center;
-          padding: 24px 16px;
+          padding: 40px 16px;
         }
 
         .signup-card {
           width: 100%;
-          max-width: 560px;
-          background: #f8f6f3;
-          border-radius: 22px;
-          padding: 22px;
-          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+          max-width: 620px;
+          background: rgba(248, 246, 243, 0.98);
+          border: 1px solid rgba(255, 255, 255, 0.28);
+          border-radius: 28px;
+          padding: 28px;
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(14px);
         }
 
         .signup-logo-wrap {
           display: flex;
           justify-content: center;
-          margin-bottom: 16px;
+          margin-bottom: 18px;
         }
 
         .signup-logo {
-          width: 140px;
-          max-width: 100%;
+          width: 160px;
           height: auto;
           object-fit: contain;
-          display: block;
+        }
+
+        .signup-heading {
+          text-align: center;
+          margin-bottom: 18px;
+        }
+
+        .signup-heading h1 {
+          margin: 0;
+          font-size: 34px;
+          line-height: 1;
+          font-weight: 800;
+          color: #111111;
+          letter-spacing: -0.04em;
+        }
+
+        .signup-heading p {
+          margin: 10px 0 0;
+          color: #5f5f5f;
+          font-size: 15px;
+          line-height: 1.6;
         }
 
         .signup-switcher {
           display: flex;
           align-items: center;
-          background: #efede9;
+          background: #ece8e3;
           border-radius: 999px;
           padding: 5px;
-          margin-bottom: 16px;
+          margin-bottom: 18px;
         }
 
         .signup-switch-link {
@@ -289,9 +359,14 @@ export default function SignupPage() {
           text-decoration: none;
           color: #6c6c6c;
           font-weight: 600;
-          font-size: 16px;
-          padding: 14px 16px;
+          font-size: 15px;
+          padding: 13px 16px;
           border-radius: 999px;
+          transition: 0.2s ease;
+        }
+
+        .signup-switch-link:hover {
+          color: #111111;
         }
 
         .signup-switch-active {
@@ -300,35 +375,43 @@ export default function SignupPage() {
           background: #ffffff;
           color: #161616;
           font-weight: 700;
-          font-size: 16px;
-          padding: 14px 16px;
+          font-size: 15px;
+          padding: 13px 16px;
           border-radius: 999px;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
         }
 
         .signup-form-grid {
           display: grid;
-          gap: 14px;
+          gap: 15px;
         }
 
         .signup-name-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 14px;
+          gap: 15px;
         }
 
         .signup-field {
-          border: 2px solid #d9d6d1;
-          border-radius: 14px;
-          padding: 12px 16px 10px;
+          border: 1.5px solid #d8d3cd;
+          border-radius: 16px;
+          padding: 13px 16px 12px;
           background: #f8f6f3;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .signup-field:focus-within,
+        .signup-phone-wrap:focus-within {
+          border-color: #111111;
+          box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.06);
         }
 
         .signup-label {
           font-size: 12px;
           color: #6f6f6f;
-          margin-bottom: 5px;
-          font-weight: 500;
+          margin-bottom: 6px;
+          font-weight: 600;
+          letter-spacing: 0.01em;
         }
 
         .signup-input {
@@ -336,9 +419,13 @@ export default function SignupPage() {
           border: none;
           outline: none;
           background: transparent;
-          font-size: 18px;
+          font-size: 17px;
           color: #222222;
           font-weight: 500;
+        }
+
+        .signup-input::placeholder {
+          color: #9a948c;
         }
 
         .signup-password-field {
@@ -347,12 +434,17 @@ export default function SignupPage() {
           gap: 12px;
         }
 
+        .signup-password-inner {
+          flex: 1;
+        }
+
         .signup-eye-btn {
           border: none;
           background: transparent;
+          color: #111111;
           cursor: pointer;
-          width: 28px;
-          height: 28px;
+          width: 34px;
+          height: 34px;
           padding: 0;
           display: flex;
           align-items: center;
@@ -362,15 +454,16 @@ export default function SignupPage() {
 
         .signup-phone-wrap {
           display: grid;
-          grid-template-columns: 100px 1fr;
-          border: 2px solid #d9d6d1;
-          border-radius: 14px;
+          grid-template-columns: 96px 1fr;
+          border: 1.5px solid #d8d3cd;
+          border-radius: 16px;
           overflow: hidden;
           background: #f8f6f3;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
         .signup-phone-flag {
-          border-right: 2px solid #d9d6d1;
+          border-right: 1.5px solid #d8d3cd;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -378,6 +471,7 @@ export default function SignupPage() {
           min-height: 72px;
           font-size: 22px;
           color: #111111;
+          background: rgba(255, 255, 255, 0.35);
         }
 
         .signup-flag-arrow {
@@ -386,7 +480,7 @@ export default function SignupPage() {
         }
 
         .signup-phone-field {
-          padding: 12px 16px 10px;
+          padding: 13px 16px 12px;
         }
 
         .signup-checkbox-row {
@@ -394,22 +488,24 @@ export default function SignupPage() {
           gap: 12px;
           align-items: flex-start;
           cursor: pointer;
-          line-height: 1.45;
+          line-height: 1.5;
           color: #3f3f46;
-          font-size: 15px;
+          font-size: 14px;
           margin-top: 2px;
         }
 
         .signup-checkbox {
-          width: 20px;
-          height: 20px;
+          width: 18px;
+          height: 18px;
           margin-top: 2px;
-          accent-color: #6b6b6b;
+          accent-color: #111111;
           flex-shrink: 0;
         }
 
         .signup-link {
           color: #2563eb;
+          text-decoration: underline;
+          text-underline-offset: 3px;
         }
 
         .signup-submit-btn {
@@ -417,108 +513,37 @@ export default function SignupPage() {
           background: #000000;
           color: #ffffff;
           border: none;
-          border-radius: 14px;
+          border-radius: 16px;
           padding: 18px 20px;
-          font-size: 18px;
+          font-size: 17px;
           font-weight: 700;
           cursor: ${loading ? "not-allowed" : "pointer"};
-          opacity: ${loading ? 0.8 : 1};
+          opacity: ${loading ? 0.82 : 1};
+          transition: transform 0.15s ease, opacity 0.15s ease;
         }
 
-        .signup-decor-left-arc,
-        .signup-decor-right-arc {
-          position: absolute;
-          top: 88px;
-          width: 260px;
-          height: 260px;
-          border-top: 10px solid rgba(255, 255, 255, 0.88);
-          border-left: 10px solid transparent;
-          border-right: 10px solid transparent;
-          border-radius: 50% 50% 0 0;
-          opacity: 0.8;
+        .signup-submit-btn:hover {
+          transform: translateY(-1px);
         }
 
-        .signup-decor-left-arc {
-          left: 8%;
-          transform: rotate(-10deg);
-        }
-
-        .signup-decor-right-arc {
-          right: 8%;
-          transform: rotate(10deg);
-        }
-
-        .signup-decor-left-bar,
-        .signup-decor-right-bar {
-          position: absolute;
-          top: 138px;
-          width: 178px;
-          height: 22px;
-          border-radius: 4px;
-        }
-
-        .signup-decor-left-bar {
-          left: 12%;
-          background: repeating-linear-gradient(
-            to right,
-            #f97316,
-            #f97316 6px,
-            transparent 6px,
-            transparent 12px
-          );
-          box-shadow: 0 0 40px rgba(249, 115, 22, 0.85);
-          transform: skew(-18deg);
-        }
-
-        .signup-decor-right-bar {
-          right: 12%;
-          background: repeating-linear-gradient(
-            to right,
-            #3b82f6,
-            #3b82f6 6px,
-            transparent 6px,
-            transparent 12px
-          );
-          box-shadow: 0 0 40px rgba(59, 130, 246, 0.85);
-          transform: skew(18deg);
-        }
-
-        @media (max-width: 900px) {
-          .signup-decor-left-arc,
-          .signup-decor-right-arc {
-            width: 180px;
-            height: 180px;
-            top: 70px;
-          }
-
-          .signup-decor-left-bar,
-          .signup-decor-right-bar {
-            width: 120px;
-            height: 16px;
-            top: 106px;
-          }
-        }
-
-        @media (max-width: 640px) {
+        @media (max-width: 768px) {
           .signup-shell {
-            padding: 18px 12px;
+            padding: 24px 12px;
             align-items: center;
           }
 
           .signup-card {
             max-width: 100%;
-            border-radius: 18px;
-            padding: 16px;
+            border-radius: 22px;
+            padding: 20px;
           }
 
-          .signup-logo {
-            width: 118px;
+          .signup-heading h1 {
+            font-size: 28px;
           }
 
-          .signup-switch-link,
-          .signup-switch-active {
+          .signup-heading p {
             font-size: 14px;
-            padding: 12px 10px;
           }
 
           .signup-name-grid {
@@ -526,7 +551,7 @@ export default function SignupPage() {
           }
 
           .signup-phone-wrap {
-            grid-template-columns: 82px 1fr;
+            grid-template-columns: 84px 1fr;
           }
 
           .signup-phone-flag {
@@ -539,19 +564,15 @@ export default function SignupPage() {
           }
 
           .signup-submit-btn {
-            padding: 16px 18px;
-            font-size: 17px;
+            padding: 17px 18px;
+            font-size: 16px;
           }
 
-          .signup-checkbox-row {
-            font-size: 14px;
-          }
-
-          .signup-decor-left-arc,
-          .signup-decor-right-arc,
-          .signup-decor-left-bar,
-          .signup-decor-right-bar {
-            display: none;
+          .signup-glow {
+            width: 280px;
+            height: 280px;
+            filter: blur(90px);
+            opacity: 0.18;
           }
         }
       `}</style>
