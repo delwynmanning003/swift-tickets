@@ -20,6 +20,7 @@ type EventRow = {
   event_date?: string | null;
   location?: string | null;
   image_url?: string | null;
+  fee_option?: string | null;
   ticket_types?: TicketTypeRow[] | null;
 };
 
@@ -42,27 +43,41 @@ const rotatingSuggestions = [
   "Art Workshop In Pretoria",
 ];
 
-function getLowestTicketPrice(ticketTypes?: TicketTypeRow[] | null) {
+function parseTicketPrice(value?: number | string | null) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const numericPrice =
+    typeof value === "number"
+      ? value
+      : Number(String(value).replace(/,/g, ""));
+
+  return Number.isNaN(numericPrice) ? null : numericPrice;
+}
+
+function getBuyerTicketPrice(basePrice: number, feeOption?: string | null) {
+  if (basePrice <= 0) return 0;
+
+  if (feeOption === "buyer_pays_all") {
+    return basePrice + 3 + basePrice * 0.04;
+  }
+
+  if (feeOption === "split") {
+    return basePrice + basePrice * 0.04;
+  }
+
+  return basePrice;
+}
+
+function getLowestDisplayTicketPrice(
+  ticketTypes?: TicketTypeRow[] | null,
+  feeOption?: string | null
+) {
   if (!ticketTypes || ticketTypes.length === 0) return null;
 
   const prices = ticketTypes
-    .map((ticket) => {
-      if (
-        ticket.price === null ||
-        ticket.price === undefined ||
-        ticket.price === ""
-      ) {
-        return null;
-      }
-
-      const numericPrice =
-        typeof ticket.price === "number"
-          ? ticket.price
-          : Number(String(ticket.price).replace(/,/g, ""));
-
-      return Number.isNaN(numericPrice) ? null : numericPrice;
-    })
-    .filter((price): price is number => price !== null);
+    .map((ticket) => parseTicketPrice(ticket.price))
+    .filter((price): price is number => price !== null)
+    .map((price) => getBuyerTicketPrice(price, feeOption));
 
   if (prices.length === 0) return null;
 
@@ -135,6 +150,7 @@ export default function HomePage() {
         event_date: event.event_date,
         location: event.location,
         image_url: event.image_url,
+        fee_option: event.fee_option,
         ticket_types: ticketTypesError
           ? []
           : (ticketTypesData || []).filter(
@@ -756,8 +772,12 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:gap-x-5">
               {trendingEvents.map((event, index) => {
-                const lowestPrice = getLowestTicketPrice(event.ticket_types);
+                const lowestPrice = getLowestDisplayTicketPrice(
+                  event.ticket_types,
+                  event.fee_option
+                );
                 const priceLabel = formatPriceLabel(lowestPrice);
+                const hasPaidTickets = lowestPrice !== null && lowestPrice > 0;
                 const isOrange = index % 2 === 0;
 
                 const accentText = isOrange
@@ -839,10 +859,22 @@ export default function HomePage() {
 
                         {priceLabel && (
                           <div className="mt-4">
-                            <div
-                              className={`inline-flex min-h-[42px] items-center rounded-[4px] border border-white bg-white px-5 py-2.5 text-[11px] font-extrabold uppercase tracking-[-0.02em] text-black transition-all duration-200 sm:min-h-[44px] sm:px-6 sm:text-[12px] ${accentBorder} ${accentButton}`}
-                            >
-                              {priceLabel}
+                            <div className="flex flex-col items-start gap-1">
+                              <div
+                                className={`inline-flex min-h-[42px] items-center rounded-[4px] border border-white bg-white px-5 py-2.5 text-[11px] font-extrabold uppercase tracking-[-0.02em] text-black transition-all duration-200 sm:min-h-[44px] sm:px-6 sm:text-[12px] ${accentBorder} ${accentButton}`}
+                              >
+                                {priceLabel}
+                              </div>
+
+                              {hasPaidTickets ? (
+                                <p className="text-[11px] uppercase tracking-[0.08em] text-white/55">
+                                  Includes all fees
+                                </p>
+                              ) : (
+                                <p className="text-[11px] uppercase tracking-[0.08em] text-white/55">
+                                  No extra fees
+                                </p>
+                              )}
                             </div>
                           </div>
                         )}
