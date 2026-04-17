@@ -19,6 +19,13 @@ function PaymentSuccessContent() {
         return;
       }
 
+      // Free tickets do not go through Paystack
+      if (reference.startsWith("free_")) {
+        setStatus("success");
+        setMessage("Your free ticket has been issued successfully.");
+        return;
+      }
+
       try {
         const res = await fetch(
           `/api/paystack/verify?reference=${encodeURIComponent(reference)}`
