@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
@@ -13,7 +13,10 @@ type EventType = {
   event_date?: string | null;
   category?: string | null;
   image_url?: string | null;
+  description?: string | null;
 };
+
+const quickSearches = ["Amapiano", "Festival", "Business", "Brunch", "Live Music"];
 
 function formatEventDate(value?: string | null) {
   if (!value) return "";
@@ -32,11 +35,19 @@ function formatEventDate(value?: string | null) {
 }
 
 function ExploreContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const category = searchParams.get("category");
+
+  const category = searchParams.get("category")?.trim() || "";
+  const searchQuery = searchParams.get("q")?.trim() || "";
 
   const [events, setEvents] = useState<EventType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchValue, setSearchValue] = useState(searchQuery);
+
+  useEffect(() => {
+    setSearchValue(searchQuery);
+  }, [searchQuery]);
 
   useEffect(() => {
     let isMounted = true;
@@ -47,11 +58,17 @@ function ExploreContent() {
 
         let query = supabase
           .from("events")
-          .select("id, title, location, event_date, category, image_url")
+          .select("id, title, location, event_date, category, image_url, description")
           .order("event_date", { ascending: true });
 
         if (category) {
           query = query.eq("category", category);
+        }
+
+        if (searchQuery) {
+          query = query.or(
+            `title.ilike.%${searchQuery}%,location.ilike.%${searchQuery}%,category.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`
+          );
         }
 
         const { data, error } = await query;
@@ -77,13 +94,67 @@ function ExploreContent() {
     return () => {
       isMounted = false;
     };
-  }, [category]);
+  }, [category, searchQuery]);
+
+  const handleSearch = (value?: string) => {
+    const cleaned = (value ?? searchValue).trim();
+
+    const params = new URLSearchParams();
+
+    if (category) {
+      params.set("category", category);
+    }
+
+    if (cleaned) {
+      params.set("q", cleaned);
+    }
+
+    const queryString = params.toString();
+    router.push(queryString ? `/explore?${queryString}` : "/explore");
+  };
+
+  const clearSearch = () => {
+    setSearchValue("");
+
+    if (category) {
+      router.push(`/explore?category=${encodeURIComponent(category)}`);
+      return;
+    }
+
+    router.push("/explore");
+  };
 
   const pageTitle = useMemo(() => {
-    return category
-      ? `${category.charAt(0).toUpperCase()}${category.slice(1)} Events`
-      : "Explore Events";
-  }, [category]);
+    if (searchQuery && category) {
+      return `${category.charAt(0).toUpperCase()}${category.slice(1)} results for "${searchQuery}"`;
+    }
+
+    if (searchQuery) {
+      return `Search results for "${searchQuery}"`;
+    }
+
+    if (category) {
+      return `${category.charAt(0).toUpperCase()}${category.slice(1)} Events`;
+    }
+
+    return "Explore Events";
+  }, [category, searchQuery]);
+
+  const pageDescription = useMemo(() => {
+    if (searchQuery && category) {
+      return `Showing ${category} events matching "${searchQuery}".`;
+    }
+
+    if (searchQuery) {
+      return `Showing events matching "${searchQuery}".`;
+    }
+
+    if (category) {
+      return `Discover ${category} events on Swift Tickets.`;
+    }
+
+    return "Discover events across music, lifestyle, business, festivals and more.";
+  }, [category, searchQuery]);
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -95,39 +166,87 @@ function ExploreContent() {
           <h1 className="text-4xl font-extrabold tracking-[-0.03em]">
             {pageTitle}
           </h1>
-          <p className="mt-3 text-white/65">
-            Discover events across music, lifestyle, business, festivals and
-            more.
-          </p>
+          <p className="mt-3 text-white/65">{pageDescription}</p>
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl bg-white/[0.03] px-4 py-3">
+              <span className="shrink-0 text-lg text-white/65">⌕</span>
+
+              <input
+                type="text"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
+                placeholder="Search events, cities, categories..."
+                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+              />
+
+              {searchValue && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="shrink-0 rounded-full bg-white/5 px-2.5 py-1 text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => handleSearch()}
+              className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+            >
+              Search
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {quickSearches.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => handleSearch(item)}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/70 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mb-8 flex flex-wrap gap-3">
           <Link
-            href="/explore"
+            href={searchQuery ? `/explore?q=${encodeURIComponent(searchQuery)}` : "/explore"}
             className="border border-white/15 px-4 py-2 text-sm font-semibold text-white hover:border-white/40"
           >
             All
           </Link>
           <Link
-            href="/explore?category=festival"
+            href={`/explore?category=festival${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ""}`}
             className="border border-white/15 px-4 py-2 text-sm font-semibold text-white hover:border-white/40"
           >
             Festival
           </Link>
           <Link
-            href="/explore?category=music"
+            href={`/explore?category=music${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ""}`}
             className="border border-white/15 px-4 py-2 text-sm font-semibold text-white hover:border-white/40"
           >
             Music
           </Link>
           <Link
-            href="/explore?category=lifestyle"
+            href={`/explore?category=lifestyle${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ""}`}
             className="border border-white/15 px-4 py-2 text-sm font-semibold text-white hover:border-white/40"
           >
             Lifestyle
           </Link>
           <Link
-            href="/explore?category=business"
+            href={`/explore?category=business${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ""}`}
             className="border border-white/15 px-4 py-2 text-sm font-semibold text-white hover:border-white/40"
           >
             Business
@@ -140,7 +259,11 @@ function ExploreContent() {
           <div className="border border-white/10 bg-white/[0.03] p-6">
             <p className="text-lg font-semibold">No events found</p>
             <p className="mt-2 text-white/60">
-              There are no events in this category yet.
+              {searchQuery
+                ? `There are no events matching "${searchQuery}"${category ? ` in ${category}` : ""} yet.`
+                : category
+                ? "There are no events in this category yet."
+                : "There are no events available yet."}
             </p>
           </div>
         ) : (
@@ -149,7 +272,7 @@ function ExploreContent() {
               <Link
                 key={event.id}
                 href={`/events/${event.id}`}
-                className="overflow-hidden border border-white/10 bg-white/[0.03] transition hover:border-white/30"
+                className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition hover:border-white/30"
               >
                 <div className="relative h-56 w-full bg-white/5">
                   {event.image_url ? (
@@ -170,6 +293,7 @@ function ExploreContent() {
                   <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/45">
                     {event.category || "Event"}
                   </p>
+
                   <h2 className="text-2xl font-bold tracking-[-0.02em]">
                     {event.title}
                   </h2>

@@ -26,23 +26,25 @@ type EventRow = {
 };
 
 const categories = [
-  { name: "Festival", image: "/categories/festival.jpg" },
-  { name: "Music", image: "/categories/music.jpg" },
-  { name: "Lifestyle", image: "/categories/lifestyle.jpg" },
-  { name: "Business", image: "/categories/business.jpg" },
+  { name: "Festival", image: "/categories/festival.jpg", slug: "festival" },
+  { name: "Music", image: "/categories/music.jpg", slug: "music" },
+  { name: "Lifestyle", image: "/categories/lifestyle.jpg", slug: "lifestyle" },
+  { name: "Business", image: "/categories/business.jpg", slug: "business" },
 ];
 
 const fixedPrompt = "What Do You Want To Experience Live?";
 const rotatingSuggestions = [
-  "Hike Up Table Mountain",
-  "Amapiano In Soweto",
-  "Padel Class In Umhlanga",
-  "Wine Tasting In Stellenbosch",
-  "Jazz Night In Cape Town",
+  "Amapiano In Johannesburg",
+  "Festival In Cape Town",
+  "Brunch In Durban",
+  "Business Networking In Sandton",
+  "Jazz Night In Pretoria",
   "Food Market In Johannesburg",
-  "Sunset Picnic In Durban",
-  "Art Workshop In Pretoria",
+  "Art Workshop In Cape Town",
+  "Wine Tasting In Stellenbosch",
 ];
+
+const quickSearches = ["Amapiano", "Festival", "Business", "Brunch", "Live Music"];
 
 function parseTicketPrice(value?: number | string | null) {
   if (value === null || value === undefined || value === "") return null;
@@ -299,15 +301,15 @@ export default function HomePage() {
     window.location.reload();
   };
 
-  const handleSearch = () => {
-    const cleaned = searchValue.trim();
+  const handleSearch = (value?: string) => {
+    const cleaned = (value ?? searchValue).trim();
 
     if (!cleaned) {
-      router.push("/events");
+      router.push("/explore");
       return;
     }
 
-    router.push(`/events?q=${encodeURIComponent(cleaned)}`);
+    router.push(`/explore?q=${encodeURIComponent(cleaned)}`);
   };
 
   return (
@@ -359,7 +361,7 @@ export default function HomePage() {
                     </h3>
 
                     <Link
-                      href="/categories"
+                      href="/explore"
                       className="text-[11px] text-white/70 transition hover:text-white hover:underline underline-offset-4"
                     >
                       View all
@@ -370,7 +372,7 @@ export default function HomePage() {
                     {categories.map((cat) => (
                       <Link
                         key={cat.name}
-                        href="/categories"
+                        href={`/explore?category=${cat.slug}`}
                         className="group/item flex items-center justify-between rounded-sm border border-white/10 bg-white/[0.03] px-2.5 py-1.5 transition hover:border-white/20 hover:bg-white/[0.06]"
                       >
                         <div className="flex items-center gap-3">
@@ -548,6 +550,14 @@ export default function HomePage() {
                     Sell My Ticket
                   </Link>
 
+                  <Link
+                    href="/explore"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="rounded-xl px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/10"
+                  >
+                    Explore
+                  </Link>
+
                   {!checkingAuth && user ? (
                     <>
                       <Link
@@ -595,7 +605,7 @@ export default function HomePage() {
 
           <div className="ml-auto flex items-center gap-2">
             <Link
-              href="/categories"
+              href="/explore"
               className="flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-tight text-white transition hover:bg-white/10"
             >
               Explore
@@ -712,59 +722,87 @@ export default function HomePage() {
             For the people, by the people
           </p>
 
-          <div className="mt-5 w-full max-w-[780px] rounded-2xl bg-white p-3 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition hover:shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:rounded-xl sm:p-4 md:rounded-sm md:px-5 md:py-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="shrink-0 text-[20px]">⌕</span>
+          <div className="mt-5 w-full max-w-[860px]">
+            <div className="rounded-2xl border border-white/10 bg-white/95 p-3 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:rounded-xl sm:p-4 md:rounded-[20px] md:px-5 md:py-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-black/[0.03] px-3 py-3 md:rounded-xl">
+                  <span className="shrink-0 text-[20px] text-black/70">⌕</span>
 
-                <div className="relative min-w-0 flex-1 text-left">
-                  <input
-                    type="text"
-                    value={searchValue}
-                    onChange={(e) => {
-                      setIsUserTyping(true);
-                      setSearchValue(e.target.value);
-                    }}
-                    onFocus={() => setIsUserTyping(true)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleSearch();
-                      }
-                    }}
-                    className="w-full bg-transparent text-[15px] font-medium text-black outline-none sm:text-[16px]"
-                  />
+                  <div className="relative min-w-0 flex-1 text-left">
+                    <input
+                      type="text"
+                      value={searchValue}
+                      onChange={(e) => {
+                        setIsUserTyping(true);
+                        setSearchValue(e.target.value);
+                      }}
+                      onFocus={() => setIsUserTyping(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleSearch();
+                        }
+                      }}
+                      className="w-full bg-transparent text-[15px] font-medium text-black outline-none sm:text-[16px]"
+                    />
 
-                  {!searchValue && (
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex max-w-full items-center overflow-hidden whitespace-nowrap">
-                      <span className="truncate text-[15px] font-bold tracking-[-0.02em] text-black sm:text-[16px]">
-                        {typedPrompt}
-                        {!typingComplete && (
-                          <span className="ml-1 inline-block h-5 w-[1.5px] animate-pulse bg-black/60 align-middle" />
-                        )}
-                      </span>
-
-                      {typingComplete && (
-                        <span
-                          className={`ml-2 hidden truncate text-[15px] italic font-medium tracking-[-0.01em] text-black/55 transition-all duration-500 sm:block sm:text-[16px] ${
-                            isSuggestionVisible
-                              ? "translate-y-0 opacity-100"
-                              : "translate-y-1 opacity-0"
-                          }`}
-                        >
-                          {rotatingSuggestions[suggestionIndex]}
+                    {!searchValue && (
+                      <div className="pointer-events-none absolute inset-y-0 left-0 flex max-w-full items-center overflow-hidden whitespace-nowrap">
+                        <span className="truncate text-[15px] font-bold tracking-[-0.02em] text-black sm:text-[16px]">
+                          {typedPrompt}
+                          {!typingComplete && (
+                            <span className="ml-1 inline-block h-5 w-[1.5px] animate-pulse bg-black/60 align-middle" />
+                          )}
                         </span>
-                      )}
-                    </div>
+
+                        {typingComplete && (
+                          <span
+                            className={`ml-2 hidden truncate text-[15px] italic font-medium tracking-[-0.01em] text-black/55 transition-all duration-500 sm:block sm:text-[16px] ${
+                              isSuggestionVisible
+                                ? "translate-y-0 opacity-100"
+                                : "translate-y-1 opacity-0"
+                            }`}
+                          >
+                            {rotatingSuggestions[suggestionIndex]}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {searchValue && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchValue("");
+                        setIsUserTyping(false);
+                      }}
+                      className="shrink-0 rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-black/65 transition hover:bg-black/10 hover:text-black"
+                    >
+                      Clear
+                    </button>
                   )}
                 </div>
+
+                <button
+                  onClick={() => handleSearch()}
+                  className="w-full rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-black/85 sm:w-auto sm:min-w-[140px] md:rounded-xl"
+                >
+                  Search
+                </button>
               </div>
 
-              <button
-                onClick={handleSearch}
-                className="w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black/80 sm:w-auto sm:min-w-[120px] md:rounded-sm md:px-6 md:py-2.5"
-              >
-                Search
-              </button>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                {quickSearches.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => handleSearch(item)}
+                    className="rounded-full border border-black/10 bg-black/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-black/70 transition hover:border-black/20 hover:bg-black/[0.06] hover:text-black"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -780,7 +818,7 @@ export default function HomePage() {
             </h2>
 
             <Link
-              href="/events"
+              href="/explore"
               className="shrink-0 text-sm text-white/70 transition hover:text-white hover:underline underline-offset-4"
             >
               View all →
@@ -916,7 +954,7 @@ export default function HomePage() {
             </h2>
 
             <Link
-              href="/categories"
+              href="/explore"
               className="shrink-0 text-sm text-white/70 transition hover:text-white hover:underline underline-offset-4"
             >
               Explore all →
@@ -925,9 +963,10 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {categories.map((cat) => (
-              <div
+              <Link
                 key={cat.name}
-                className="group relative h-[190px] overflow-hidden rounded-2xl bg-zinc-900"
+                href={`/explore?category=${cat.slug}`}
+                className="group relative block h-[190px] overflow-hidden rounded-2xl bg-zinc-900"
               >
                 <Image
                   src={cat.image}
@@ -943,7 +982,7 @@ export default function HomePage() {
                     {cat.name}
                   </p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </section>
@@ -960,8 +999,7 @@ export default function HomePage() {
               className="h-12 w-auto object-contain opacity-90"
             />
             <p className="mt-4 text-sm leading-6 text-white/45">
-              Discover events, create experiences, and resell tickets
-              seamlessly.
+              Discover events, create experiences, and resell tickets seamlessly.
             </p>
           </div>
 
