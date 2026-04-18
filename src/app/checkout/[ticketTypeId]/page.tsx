@@ -38,6 +38,8 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
 
+  const freeTicketLimit = 2;
+
   useEffect(() => {
     const getUser = async () => {
       const {
@@ -112,10 +114,10 @@ export default function CheckoutPage() {
       }
     };
 
-    if (ticketTypeId) loadData();
+    if (ticketTypeId) {
+      loadData();
+    }
   }, [ticketTypeId]);
-
-  const freeTicketLimit = 2;
 
   const maxAllowedQuantity = useMemo(() => {
     if (!ticket) return 1;
@@ -188,13 +190,13 @@ export default function CheckoutPage() {
     if (!ticket) return;
 
     setQuantity((current) => {
-      const next = Math.max(1, Math.min(current, maxAllowedQuantity || 1));
-      return next;
+      return Math.max(1, Math.min(current, maxAllowedQuantity || 1));
     });
   }, [ticket, maxAllowedQuantity]);
 
   const serviceFee = Math.max(amounts.buyerTotal - amounts.baseAmount, 0);
   const isFreeTicket = amounts.buyerTotal === 0;
+  const soldOut = !ticket || Number(ticket.quantity) <= 0;
 
   const handlePay = async () => {
     if (!ticket || !eventData) {
@@ -395,8 +397,6 @@ export default function CheckoutPage() {
     );
   }
 
-  const soldOut = Number(ticket.quantity) <= 0;
-
   return (
     <main className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-3xl px-6 py-10">
@@ -410,6 +410,14 @@ export default function CheckoutPage() {
           {eventData?.title && (
             <p className="mt-3 text-lg text-white/75">{eventData.title}</p>
           )}
+          {eventData?.location && (
+            <p className="mt-1 text-sm text-white/50">{eventData.location}</p>
+          )}
+          {eventData?.event_date && (
+            <p className="mt-1 text-sm text-white/50">
+              {new Date(eventData.event_date).toLocaleString()}
+            </p>
+          )}
         </div>
 
         <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
@@ -417,7 +425,7 @@ export default function CheckoutPage() {
             <h2 className="mb-5 text-2xl font-bold">Buyer Details</h2>
 
             {soldOut ? (
-              <div className="rounded-none border border-red-500/40 bg-red-500/10 p-4">
+              <div className="border border-red-500/40 bg-red-500/10 p-4">
                 <p className="font-semibold text-red-300">Sold Out</p>
               </div>
             ) : (
@@ -469,6 +477,11 @@ export default function CheckoutPage() {
                       Maximum {freeTicketLimit} free tickets per order.
                     </p>
                   )}
+                  {!soldOut && Number(ticket.price) > 0 && (
+                    <p className="mt-2 text-sm text-white/55">
+                      {ticket.quantity} ticket{ticket.quantity === 1 ? "" : "s"} remaining.
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -493,18 +506,19 @@ export default function CheckoutPage() {
               </div>
 
               <div className="flex items-center justify-between gap-4">
+                <span className="text-white/65">Quantity</span>
+                <span className="font-medium">{quantity}</span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-white/65">Subtotal</span>
-                <span className="font-medium">
-                  R{amounts.baseAmount.toFixed(2)}
-                </span>
+                <span className="font-medium">R{amounts.baseAmount.toFixed(2)}</span>
               </div>
 
               {serviceFee > 0 && (
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-white/65">Service Fee</span>
-                  <span className="font-medium">
-                    R{serviceFee.toFixed(2)}
-                  </span>
+                  <span className="font-medium">R{serviceFee.toFixed(2)}</span>
                 </div>
               )}
 
