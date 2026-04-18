@@ -44,8 +44,6 @@ const rotatingSuggestions = [
   "Wine Tasting In Stellenbosch",
 ];
 
-const quickSearches = ["Amapiano", "Festival", "Business", "Brunch", "Live Music"];
-
 function parseTicketPrice(value?: number | string | null) {
   if (value === null || value === undefined || value === "") return null;
 
@@ -301,8 +299,8 @@ export default function HomePage() {
     window.location.reload();
   };
 
-  const handleSearch = (value?: string) => {
-    const cleaned = (value ?? searchValue).trim();
+  const handleSearch = () => {
+    const cleaned = searchValue.trim();
 
     if (!cleaned) {
       router.push("/explore");
@@ -722,87 +720,59 @@ export default function HomePage() {
             For the people, by the people
           </p>
 
-          <div className="mt-5 w-full max-w-[860px]">
-            <div className="rounded-2xl border border-white/10 bg-white/95 p-3 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:rounded-xl sm:p-4 md:rounded-[20px] md:px-5 md:py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl bg-black/[0.03] px-3 py-3 md:rounded-xl">
-                  <span className="shrink-0 text-[20px] text-black/70">⌕</span>
+          <div className="mt-5 w-full max-w-[780px] rounded-2xl bg-white p-3 text-black shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition hover:shadow-[0_18px_60px_rgba(0,0,0,0.45)] sm:rounded-xl sm:p-4 md:rounded-sm md:px-5 md:py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <span className="shrink-0 text-[20px]">⌕</span>
 
-                  <div className="relative min-w-0 flex-1 text-left">
-                    <input
-                      type="text"
-                      value={searchValue}
-                      onChange={(e) => {
-                        setIsUserTyping(true);
-                        setSearchValue(e.target.value);
-                      }}
-                      onFocus={() => setIsUserTyping(true)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleSearch();
-                        }
-                      }}
-                      className="w-full bg-transparent text-[15px] font-medium text-black outline-none sm:text-[16px]"
-                    />
+                <div className="relative min-w-0 flex-1 text-left">
+                  <input
+                    type="text"
+                    value={searchValue}
+                    onChange={(e) => {
+                      setIsUserTyping(true);
+                      setSearchValue(e.target.value);
+                    }}
+                    onFocus={() => setIsUserTyping(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSearch();
+                      }
+                    }}
+                    className="w-full bg-transparent text-[15px] font-medium text-black outline-none sm:text-[16px]"
+                  />
 
-                    {!searchValue && (
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex max-w-full items-center overflow-hidden whitespace-nowrap">
-                        <span className="truncate text-[15px] font-bold tracking-[-0.02em] text-black sm:text-[16px]">
-                          {typedPrompt}
-                          {!typingComplete && (
-                            <span className="ml-1 inline-block h-5 w-[1.5px] animate-pulse bg-black/60 align-middle" />
-                          )}
-                        </span>
-
-                        {typingComplete && (
-                          <span
-                            className={`ml-2 hidden truncate text-[15px] italic font-medium tracking-[-0.01em] text-black/55 transition-all duration-500 sm:block sm:text-[16px] ${
-                              isSuggestionVisible
-                                ? "translate-y-0 opacity-100"
-                                : "translate-y-1 opacity-0"
-                            }`}
-                          >
-                            {rotatingSuggestions[suggestionIndex]}
-                          </span>
+                  {!searchValue && (
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex max-w-full items-center overflow-hidden whitespace-nowrap">
+                      <span className="truncate text-[15px] font-bold tracking-[-0.02em] text-black sm:text-[16px]">
+                        {typedPrompt}
+                        {!typingComplete && (
+                          <span className="ml-1 inline-block h-5 w-[1.5px] animate-pulse bg-black/60 align-middle" />
                         )}
-                      </div>
-                    )}
-                  </div>
+                      </span>
 
-                  {searchValue && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchValue("");
-                        setIsUserTyping(false);
-                      }}
-                      className="shrink-0 rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-black/65 transition hover:bg-black/10 hover:text-black"
-                    >
-                      Clear
-                    </button>
+                      {typingComplete && (
+                        <span
+                          className={`ml-2 hidden truncate text-[15px] italic font-medium tracking-[-0.01em] text-black/55 transition-all duration-500 sm:block sm:text-[16px] ${
+                            isSuggestionVisible
+                              ? "translate-y-0 opacity-100"
+                              : "translate-y-1 opacity-0"
+                          }`}
+                        >
+                          {rotatingSuggestions[suggestionIndex]}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
-
-                <button
-                  onClick={() => handleSearch()}
-                  className="w-full rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-black/85 sm:w-auto sm:min-w-[140px] md:rounded-xl"
-                >
-                  Search
-                </button>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                {quickSearches.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => handleSearch(item)}
-                    className="rounded-full border border-black/10 bg-black/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-black/70 transition hover:border-black/20 hover:bg-black/[0.06] hover:text-black"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
+              <button
+                onClick={handleSearch}
+                className="w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black/80 sm:w-auto sm:min-w-[120px] md:rounded-sm md:px-6 md:py-2.5"
+              >
+                Search
+              </button>
             </div>
           </div>
         </div>
