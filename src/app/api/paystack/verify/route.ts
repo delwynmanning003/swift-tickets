@@ -4,7 +4,7 @@ import { Resend } from "resend";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 function getResendClient() {
@@ -153,23 +153,31 @@ async function finalizeOrder(reference: string, skipPaystack = false) {
   }
 
   if (!skipPaystack) {
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+
+    if (!paystackSecret) {
+      return { error: "Missing PAYSTACK_SECRET_KEY", status: 500 };
+    }
+
     const paystackRes = await fetch(
       `https://api.paystack.co/transaction/verify/${reference}`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          Authorization: `Bearer ${paystackSecret}`,
         },
       }
     );
 
     const paystackData = await paystackRes.json();
 
-    if (!paystackData.status || paystackData.data?.status !== "success") {
+    if (!paystackRes.ok || !paystackData.status || paystackData.data?.status !== "success") {
       return { error: "Payment not successful", status: 400 };
     }
   }
 
-  const tickets = Array.from({ length: Number(order.quantity) }).map(() => ({
+  const orderQuantity = Number(order.quantity);
+
+  const tickets = Array.from({ length: orderQuantity }).map(() => ({
     order_id: order.id,
     ticket_type_id: order.ticket_type_id,
     user_id: order.user_id ?? null,
@@ -187,7 +195,7 @@ async function finalizeOrder(reference: string, skipPaystack = false) {
     return { error: ticketInsertError.message, status: 500 };
   }
 
-  const newQuantity = Number(ticketType.quantity) - Number(order.quantity);
+  const newQuantity = Number(ticketType.quantity) - orderQuantity;
 
   const { error: updateQtyError } = await supabase
     .from("ticket_types")
@@ -207,16 +215,18 @@ async function finalizeOrder(reference: string, skipPaystack = false) {
     return { error: updateOrderError.message, status: 500 };
   }
 
-  await sendTicketEmail({
-    buyerEmail: order.buyer_email,
-    buyerName: order.buyer_name,
-    eventTitle: eventRow.title,
-    eventLocation: eventRow.location,
-    eventDate: eventRow.event_date,
-    ticketTypeName: ticketType.name,
-    quantity: Number(order.quantity),
-    reference,
-  });
+  if (order.buyer_email) {
+    await sendTicketEmail({
+      buyerEmail: order.buyer_email,
+      buyerName: order.buyer_name,
+      eventTitle: eventRow.title,
+      eventLocation: eventRow.location,
+      eventDate: eventRow.event_date,
+      ticketTypeName: ticketType.name,
+      quantity: orderQuantity,
+      reference,
+    });
+  }
 
   return {
     success: true,
@@ -247,6 +257,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json(result);
   } catch (error) {
+    console.error("Verify route error:", error);
+
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Server error",
