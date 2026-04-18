@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -105,6 +106,8 @@ function formatEventDate(date?: string | null) {
 }
 
 export default function HomePage() {
+  const router = useRouter();
+
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -294,6 +297,17 @@ export default function HomePage() {
     }
 
     window.location.reload();
+  };
+
+  const handleSearch = () => {
+    const cleaned = searchValue.trim();
+
+    if (!cleaned) {
+      router.push("/events");
+      return;
+    }
+
+    router.push(`/events?q=${encodeURIComponent(cleaned)}`);
   };
 
   return (
@@ -712,6 +726,11 @@ export default function HomePage() {
                       setSearchValue(e.target.value);
                     }}
                     onFocus={() => setIsUserTyping(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSearch();
+                      }
+                    }}
                     className="w-full bg-transparent text-[15px] font-medium text-black outline-none sm:text-[16px]"
                   />
 
@@ -740,7 +759,10 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <button className="w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black/80 sm:w-auto sm:min-w-[120px] md:rounded-sm md:px-6 md:py-2.5">
+              <button
+                onClick={handleSearch}
+                className="w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black/80 sm:w-auto sm:min-w-[120px] md:rounded-sm md:px-6 md:py-2.5"
+              >
                 Search
               </button>
             </div>
@@ -750,7 +772,7 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-0 z-10 h-24 w-full bg-gradient-to-b from-transparent via-black/70 to-black" />
       </section>
 
-      <div className="relative z-20 mx-auto max-w-[1300px] -mt-3 px-4 pt-2 pb-12 sm:-mt-10 sm:px-6 md:-mt-16">
+      <div className="relative z-20 mx-auto max-w-[1300px] -mt-3 px-4 pb-12 pt-2 sm:-mt-10 sm:px-6 md:-mt-16">
         <section className="mb-20">
           <div className="mb-7 flex items-center justify-between gap-4">
             <h2 className="text-[28px] font-bold tracking-tight md:text-[30px]">
@@ -927,7 +949,7 @@ export default function HomePage() {
         </section>
       </div>
 
-      <footer className="mt-16 border-t border-white/10 bg-black animate-fade-in">
+      <footer className="mt-16 animate-fade-in border-t border-white/10 bg-black">
         <div className="mx-auto flex max-w-[1300px] flex-col gap-10 px-4 py-10 sm:px-6 md:flex-row md:items-start md:justify-between">
           <div className="max-w-[260px]">
             <Image
@@ -938,7 +960,8 @@ export default function HomePage() {
               className="h-12 w-auto object-contain opacity-90"
             />
             <p className="mt-4 text-sm leading-6 text-white/45">
-              Discover events, create experiences, and resell tickets seamlessly.
+              Discover events, create experiences, and resell tickets
+              seamlessly.
             </p>
           </div>
 
