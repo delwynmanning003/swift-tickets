@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
@@ -19,23 +20,109 @@ function PaymentSuccessContent() {
         return;
       }
 
-      // Free tickets do not go through Paystack
-      if (reference.startsWith("free_")) {
-        setStatus("success");
-        setMessage("Your free ticket has been issued successfully.");
-        return;
-      }
-
       try {
-        const res = await fetch(
-          `/api/paystack/verify?reference=${encodeURIComponent(reference)}`
-        );
+        const { data: order, error: orderError } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("reference", reference)
+          .single();
 
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
+        if (orderError || !order) {
+          console.error("Order lookup error:", orderError);
           setStatus("error");
-          setMessage(data.error || "Failed to finalize order.");
+          setMessage("Order not found.");
+          return;
+        }
+
+        if (order.status === "paid") {
+          setStatus("success");
+          setMessage("Your ticket has already been issued.");
+          return;
+        }
+
+        if (!reference.startsWith("free_")) {
+          const res = await fetch(
+            `/api/paystack/verify?reference=${encodeURIComponent(reference)}`
+          );
+
+          const data = await res.json();
+
+          if (!res.ok || !data.success) {
+            console.error("Payment verification failed:", data);
+            setStatus("error");
+            setMessage(data.error || "Payment verification failed.");
+            return;
+          }
+        }
+
+        const { data: ticketType, error: ticketTypeError } = await supabase
+          .from("ticket_types")
+          .select("*")
+          .eq("id", order.ticket_type_id)
+          .single();
+
+        if (ticketTypeError || !ticketType) {
+          console.error("Ticket type lookup error:", ticketTypeError);
+          setStatus("error");
+          setMessage("Ticket type not found.");
+          return;
+        }
+
+        const currentQuantity = Number(ticketType.quantity) || 0;
+        const orderQuantity = Number(order.quantity) || 0;
+
+        if (currentQuantity < orderQuantity) {
+          setStatus("error");
+          setMessage("Not enough ticket stock available to finalize this order.");
+          return;
+        }
+
+        const ticketsToInsert = [];
+
+        for (let i = 0; i < orderQuantity; i++) {
+          ticketsToInsert.push({
+            user_id: order.user_id,
+            order_id: order.id,
+            ticket_type_id: order.ticket_type_id,
+            qr_code: crypto.randomUUID(),
+            checked_in: false,
+          });
+        }
+
+        const { error: ticketInsertError } = await supabase
+          .from("tickets")
+          .insert(ticketsToInsert);
+
+        if (ticketInsertError) {
+          console.error("Ticket insert error:", ticketInsertError);
+          setStatus("error");
+          setMessage("Failed to generate tickets.");
+          return;
+        }
+
+        const { error: stockUpdateError } = await supabase
+          .from("ticket_types")
+          .update({
+            quantity: currentQuantity - orderQuantity,
+          })
+          .eq("id", order.ticket_type_id);
+
+        if (stockUpdateError) {
+          console.error("Stock update error:", stockUpdateError);
+          setStatus("error");
+          setMessage("Tickets were created, but stock update failed.");
+          return;
+        }
+
+        const { error: orderUpdateError } = await supabase
+          .from("orders")
+          .update({ status: "paid" })
+          .eq("id", order.id);
+
+        if (orderUpdateError) {
+          console.error("Order update error:", orderUpdateError);
+          setStatus("error");
+          setMessage("Tickets were created, but order update failed.");
           return;
         }
 
