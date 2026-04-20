@@ -18,6 +18,8 @@ type CreatorType = (typeof creatorTypes)[number] | "";
 
 export default function CreateEventPage() {
   const [title, setTitle] = useState("");
+  const [venueName, setVenueName] = useState("");
+  const [venueAddress, setVenueAddress] = useState("");
   const [location, setLocation] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [eventTime, setEventTime] = useState("");
@@ -182,8 +184,13 @@ export default function CreateEventPage() {
         return;
       }
 
-      if (!location.trim()) {
-        alert("Please enter a location");
+      if (!venueName.trim()) {
+        alert("Please enter a venue name");
+        return;
+      }
+
+      if (!venueAddress.trim()) {
+        alert("Please enter a venue address");
         return;
       }
 
@@ -241,12 +248,16 @@ export default function CreateEventPage() {
 
       const imageUrl = await uploadPoster();
 
+      const safeLocation = venueAddress.trim();
+
       const { data: event, error: eventError } = await supabase
         .from("events")
         .insert([
           {
             title: title.trim(),
-            location: location.trim(),
+            venue_name: venueName.trim(),
+            venue_address: venueAddress.trim(),
+            location: safeLocation,
             event_date: combinedDateTime,
             organizer_email: organizerEmail.trim(),
             description: description.trim(),
@@ -287,6 +298,8 @@ export default function CreateEventPage() {
       alert("Event + Tickets created successfully!");
 
       setTitle("");
+      setVenueName("");
+      setVenueAddress("");
       setLocation("");
       setEventDate("");
       setEventTime("");
@@ -391,8 +404,12 @@ export default function CreateEventPage() {
             </div>
 
             <h3 className="mb-1 text-[16px] font-semibold">
-              {location || "Your location"}
+              {venueName || "Your venue"}
             </h3>
+
+            <p className="mb-1 text-[13px] text-white/70">
+              {venueAddress || "Your venue address"}
+            </p>
 
             <p className="mb-3 text-[12px] text-gray-300">{previewDate}</p>
 
@@ -453,12 +470,27 @@ export default function CreateEventPage() {
 
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                    Location
+                    Venue Name
                   </label>
                   <input
-                    placeholder="Venue or address"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. The Luxee Lounge"
+                    value={venueName}
+                    onChange={(e) => setVenueName(e.target.value)}
+                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                    Venue Address
+                  </label>
+                  <input
+                    placeholder="e.g. 14 Staib Street, New Doornfontein, Johannesburg"
+                    value={venueAddress}
+                    onChange={(e) => {
+                      setVenueAddress(e.target.value);
+                      setLocation(e.target.value);
+                    }}
                     className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
                   />
                 </div>
