@@ -137,6 +137,11 @@ export default function EventPage() {
     });
   }, [event]);
 
+  const primaryVenueName =
+    event?.venue_name || event?.location || "Venue TBA";
+  const primaryVenueAddress =
+    event?.venue_address || event?.location || "Address TBA";
+
   const handleShare = async () => {
     try {
       const url = typeof window !== "undefined" ? window.location.href : "";
@@ -439,7 +444,7 @@ export default function EventPage() {
                 display: "flex",
                 flexWrap: "wrap",
                 gap: 10,
-                marginBottom: 12,
+                marginBottom: 14,
               }}
             >
               {event.category ? (
@@ -475,26 +480,29 @@ export default function EventPage() {
               ) : null}
             </div>
 
-            <p
-              style={{
-                margin: "0 0 2px",
-                fontSize: 16,
-                fontWeight: 500,
-                color: "white",
-              }}
-            >
-              {event.location}
-            </p>
+            <div style={{ marginBottom: 24 }}>
+              <p
+                style={{
+                  margin: "0 0 4px",
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "white",
+                }}
+              >
+                {primaryVenueName}
+              </p>
 
-            <p
-              style={{
-                margin: "0 0 24px",
-                color: "#d1d5db",
-                fontSize: 13,
-              }}
-            >
-              {event.city || "Johannesburg"}, ZA
-            </p>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#d1d5db",
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                }}
+              >
+                {primaryVenueAddress}
+              </p>
+            </div>
 
             <div
               style={{
@@ -858,19 +866,28 @@ export default function EventPage() {
                     lineHeight: 1.7,
                   }}
                 >
-                  <p style={{ marginTop: 0, marginBottom: 8, fontSize: 17 }}>
-                    <strong>{event.location}</strong>
-                  </p>
-                  <p
-                    style={{
-                      color: "#d1d5db",
-                      fontSize: 14,
-                      marginTop: 0,
-                      marginBottom: 0,
-                    }}
-                  >
-                    {event.city || "Johannesburg"}, South Africa
-                  </p>
+                  <div>
+                    <p
+                      style={{
+                        marginTop: 0,
+                        marginBottom: 6,
+                        fontSize: 18,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {primaryVenueName}
+                    </p>
+
+                    <p
+                      style={{
+                        color: "#d1d5db",
+                        fontSize: 14,
+                        margin: 0,
+                      }}
+                    >
+                      {primaryVenueAddress}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -986,25 +1003,27 @@ export default function EventPage() {
                 ) : null}
               </div>
 
-              <h3
-                style={{
-                  margin: "0 0 4px",
-                  fontSize: 16,
-                  fontWeight: 600,
-                }}
-              >
-                {event.location}
-              </h3>
+              <div style={{ marginBottom: 24 }}>
+                <h3
+                  style={{
+                    margin: "0 0 4px",
+                    fontSize: 16,
+                    fontWeight: 700,
+                  }}
+                >
+                  {primaryVenueName}
+                </h3>
 
-              <p
-                style={{
-                  margin: "0 0 24px",
-                  color: "#d1d5db",
-                  fontSize: 12,
-                }}
-              >
-                {event.city || "Johannesburg"}, ZA
-              </p>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#d1d5db",
+                    fontSize: 13,
+                  }}
+                >
+                  {primaryVenueAddress}
+                </p>
+              </div>
 
               <div
                 style={{
@@ -1485,12 +1504,21 @@ export default function EventPage() {
                       lineHeight: 1.7,
                     }}
                   >
-                    <p style={{ marginTop: 0, fontSize: 16 }}>
-                      <strong>{event.location}</strong>
-                    </p>
-                    <p style={{ color: "#d1d5db", fontSize: 15, margin: 0 }}>
-                      {event.city || "Johannesburg"}, South Africa
-                    </p>
+                    <div>
+                      <p
+                        style={{
+                          marginTop: 0,
+                          marginBottom: 6,
+                          fontSize: 18,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {primaryVenueName}
+                      </p>
+                      <p style={{ color: "#d1d5db", fontSize: 15, margin: 0 }}>
+                        {primaryVenueAddress}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
