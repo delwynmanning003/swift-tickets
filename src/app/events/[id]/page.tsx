@@ -215,7 +215,7 @@ export default function EventPage() {
         style={{
           maxWidth: 1440,
           margin: "0 auto",
-          padding: isMobile ? "14px 0 32px" : "18px 24px 48px",
+          padding: isMobile ? "10px 0 32px" : "18px 24px 48px",
         }}
       >
         {!isMobile && (
@@ -314,13 +314,13 @@ export default function EventPage() {
         )}
 
         {isMobile ? (
-          <div style={{ padding: "0 22px" }}>
+          <div style={{ padding: "0 18px" }}>
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                marginBottom: 18,
+                marginBottom: 14,
               }}
             >
               <Link
@@ -338,7 +338,7 @@ export default function EventPage() {
               <Image
                 src="/logo.svg"
                 alt="Swift Tickets"
-                width={110}
+                width={108}
                 height={34}
                 style={{ objectFit: "contain" }}
               />
@@ -363,12 +363,13 @@ export default function EventPage() {
               style={{
                 position: "relative",
                 width: "100%",
-                aspectRatio: "1 / 1.02",
+                aspectRatio: "1 / 1.04",
                 overflow: "hidden",
                 background: event.image_url
                   ? "#111"
                   : "linear-gradient(135deg,#334155,#0f172a,#1e293b)",
-                marginBottom: 22,
+                marginBottom: 20,
+                borderRadius: 22,
               }}
             >
               {event.image_url ? (
@@ -393,9 +394,10 @@ export default function EventPage() {
             <p
               style={{
                 margin: "0 0 8px",
-                color: "#d1d5db",
-                fontSize: 15,
-                lineHeight: 1.5,
+                color: "#cbd5e1",
+                fontSize: 14,
+                fontWeight: 500,
+                lineHeight: 1.45,
               }}
             >
               {formattedDate} · {formattedTime}
@@ -406,17 +408,17 @@ export default function EventPage() {
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
-                gap: 16,
-                marginBottom: 8,
+                gap: 14,
+                marginBottom: 12,
               }}
             >
               <h1
                 style={{
                   margin: 0,
-                  fontSize: 30,
-                  lineHeight: 1.05,
+                  fontSize: 31,
+                  lineHeight: 1.02,
                   fontWeight: 800,
-                  letterSpacing: "-0.8px",
+                  letterSpacing: "-0.9px",
                   flex: 1,
                 }}
               >
@@ -429,7 +431,7 @@ export default function EventPage() {
                   background: "transparent",
                   border: "none",
                   color: "white",
-                  fontSize: 20,
+                  fontSize: 19,
                   cursor: "pointer",
                   padding: 0,
                   lineHeight: 1,
@@ -443,20 +445,21 @@ export default function EventPage() {
               style={{
                 display: "flex",
                 flexWrap: "wrap",
-                gap: 10,
-                marginBottom: 14,
+                gap: 8,
+                marginBottom: 16,
               }}
             >
               {event.category ? (
                 <span
                   style={{
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    padding: "7px 12px",
-                    fontSize: 11,
+                    border: "1px solid rgba(255,255,255,0.16)",
+                    padding: "6px 11px",
+                    fontSize: 10,
                     fontWeight: 700,
                     letterSpacing: 1,
                     textTransform: "uppercase",
                     color: "#e5e7eb",
+                    borderRadius: 999,
                   }}
                 >
                   {event.category}
@@ -466,13 +469,14 @@ export default function EventPage() {
               {lowestPrice !== null ? (
                 <span
                   style={{
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    padding: "7px 12px",
-                    fontSize: 11,
+                    border: "1px solid rgba(255,255,255,0.16)",
+                    padding: "6px 11px",
+                    fontSize: 10,
                     fontWeight: 700,
                     letterSpacing: 1,
                     textTransform: "uppercase",
                     color: "#e5e7eb",
+                    borderRadius: 999,
                   }}
                 >
                   {lowestPrice === 0 ? "FREE" : `FROM ${formatMoney(lowestPrice)}`}
@@ -480,13 +484,19 @@ export default function EventPage() {
               ) : null}
             </div>
 
-            <div style={{ marginBottom: 24 }}>
+            <div
+              style={{
+                marginBottom: 18,
+              }}
+            >
               <p
                 style={{
-                  margin: "0 0 4px",
-                  fontSize: 17,
-                  fontWeight: 700,
+                  margin: 0,
+                  fontSize: 16,
+                  fontWeight: 800,
+                  letterSpacing: "-0.2px",
                   color: "white",
+                  lineHeight: 1.2,
                 }}
               >
                 {primaryVenueName}
@@ -494,10 +504,11 @@ export default function EventPage() {
 
               <p
                 style={{
-                  margin: 0,
-                  color: "#d1d5db",
-                  fontSize: 14,
-                  lineHeight: 1.5,
+                  marginTop: 4,
+                  fontSize: 13,
+                  color: "#9ca3af",
+                  lineHeight: 1.4,
+                  fontWeight: 500,
                 }}
               >
                 {primaryVenueAddress}
@@ -508,8 +519,8 @@ export default function EventPage() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 18,
-                marginBottom: 28,
+                gap: 14,
+                marginBottom: 24,
                 flexWrap: "wrap",
               }}
             >
@@ -518,8 +529,8 @@ export default function EventPage() {
                 style={{
                   color: "#8b5cf6",
                   textDecoration: "underline",
-                  fontWeight: 600,
-                  fontSize: 13,
+                  fontWeight: 700,
+                  fontSize: 12,
                   display: "inline-block",
                 }}
               >
@@ -531,12 +542,13 @@ export default function EventPage() {
                 onClick={handleShare}
                 style={{
                   background: "transparent",
-                  border: "1px solid rgba(255,255,255,0.18)",
+                  border: "1px solid rgba(255,255,255,0.14)",
                   color: "white",
-                  padding: "8px 12px",
-                  fontSize: 12,
+                  padding: "7px 11px",
+                  fontSize: 11,
                   fontWeight: 700,
                   cursor: "pointer",
+                  borderRadius: 999,
                 }}
               >
                 SHARE EVENT
@@ -552,9 +564,10 @@ export default function EventPage() {
             <div
               style={{
                 display: "flex",
-                gap: 34,
-                marginBottom: 28,
-                borderBottom: "1px solid rgba(255,255,255,0.14)",
+                gap: 24,
+                marginBottom: 22,
+                borderBottom: "1px solid rgba(255,255,255,0.12)",
+                overflowX: "auto",
               }}
             >
               <button
@@ -562,11 +575,12 @@ export default function EventPage() {
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: activeTab === "tickets" ? "white" : "#9ca3af",
-                  padding: "0 0 14px",
-                  fontSize: 16,
-                  fontWeight: 700,
+                  color: activeTab === "tickets" ? "white" : "#6b7280",
+                  padding: "0 0 12px",
+                  fontSize: 14,
+                  fontWeight: 800,
                   cursor: "pointer",
+                  whiteSpace: "nowrap",
                   borderBottom:
                     activeTab === "tickets"
                       ? "2px solid white"
@@ -581,11 +595,12 @@ export default function EventPage() {
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: activeTab === "about" ? "white" : "#9ca3af",
-                  padding: "0 0 14px",
-                  fontSize: 16,
-                  fontWeight: 700,
+                  color: activeTab === "about" ? "white" : "#6b7280",
+                  padding: "0 0 12px",
+                  fontSize: 14,
+                  fontWeight: 800,
                   cursor: "pointer",
+                  whiteSpace: "nowrap",
                   borderBottom:
                     activeTab === "about"
                       ? "2px solid white"
@@ -600,11 +615,12 @@ export default function EventPage() {
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: activeTab === "venue" ? "white" : "#9ca3af",
-                  padding: "0 0 14px",
-                  fontSize: 16,
-                  fontWeight: 700,
+                  color: activeTab === "venue" ? "white" : "#6b7280",
+                  padding: "0 0 12px",
+                  fontSize: 14,
+                  fontWeight: 800,
                   cursor: "pointer",
+                  whiteSpace: "nowrap",
                   borderBottom:
                     activeTab === "venue"
                       ? "2px solid white"
@@ -619,8 +635,8 @@ export default function EventPage() {
               <div>
                 <h2
                   style={{
-                    margin: "0 0 20px",
-                    fontSize: 26,
+                    margin: "0 0 18px",
+                    fontSize: 25,
                     fontWeight: 800,
                     letterSpacing: "-0.6px",
                   }}
@@ -628,7 +644,7 @@ export default function EventPage() {
                   Tickets
                 </h2>
 
-                <div style={{ display: "grid", gap: 16 }}>
+                <div style={{ display: "grid", gap: 14 }}>
                   {ticketTypes.map((ticket: any) => {
                     const buyerPrice = getBuyerTicketPrice(
                       Number(ticket.price || 0),
@@ -646,11 +662,13 @@ export default function EventPage() {
                       >
                         <div
                           style={{
-                            border: "1px solid rgba(255,255,255,0.6)",
-                            padding: "22px 20px",
+                            border: "1px solid rgba(255,255,255,0.14)",
+                            borderRadius: 18,
+                            padding: "18px 18px",
                             display: "flex",
                             flexDirection: "column",
-                            gap: 18,
+                            gap: 16,
+                            background: "rgba(255,255,255,0.03)",
                           }}
                         >
                           <div
@@ -664,10 +682,11 @@ export default function EventPage() {
                             <div style={{ flex: 1 }}>
                               <h3
                                 style={{
-                                  margin: "0 0 10px",
-                                  fontSize: 18,
+                                  margin: "0 0 8px",
+                                  fontSize: 17,
                                   lineHeight: 1.2,
-                                  fontWeight: 700,
+                                  fontWeight: 800,
+                                  letterSpacing: "-0.2px",
                                 }}
                               >
                                 {ticket.name}
@@ -676,8 +695,8 @@ export default function EventPage() {
                               <p
                                 style={{
                                   margin: "0 0 10px",
-                                  color: "#e5e7eb",
-                                  fontSize: 13,
+                                  color: "#d1d5db",
+                                  fontSize: 12,
                                   lineHeight: 1.55,
                                 }}
                               >
@@ -688,8 +707,8 @@ export default function EventPage() {
                                 style={{
                                   margin: 0,
                                   color: "#9ca3af",
-                                  fontSize: 11,
-                                  fontWeight: 700,
+                                  fontSize: 10,
+                                  fontWeight: 800,
                                   textTransform: "uppercase",
                                   letterSpacing: 0.8,
                                 }}
@@ -702,9 +721,10 @@ export default function EventPage() {
 
                             <div
                               style={{
-                                fontSize: 22,
+                                fontSize: 18,
                                 lineHeight: 1,
                                 color: "white",
+                                marginTop: 2,
                               }}
                             >
                               ↗
@@ -713,8 +733,9 @@ export default function EventPage() {
 
                           <div
                             style={{
-                              fontSize: 18,
+                              fontSize: 17,
                               fontWeight: 800,
+                              letterSpacing: "-0.2px",
                             }}
                           >
                             {buyerPrice === 0 ? "FREE" : formatMoney(buyerPrice)}
@@ -735,11 +756,12 @@ export default function EventPage() {
                     >
                       <div
                         style={{
-                          border: "1px solid rgba(249,115,22,0.7)",
-                          padding: "22px 20px",
+                          border: "1px solid rgba(249,115,22,0.45)",
+                          borderRadius: 18,
+                          padding: "18px 18px",
                           display: "flex",
                           flexDirection: "column",
-                          gap: 18,
+                          gap: 16,
                           background: "rgba(249,115,22,0.06)",
                         }}
                       >
@@ -754,10 +776,10 @@ export default function EventPage() {
                           <div style={{ flex: 1 }}>
                             <h3
                               style={{
-                                margin: "0 0 10px",
-                                fontSize: 18,
+                                margin: "0 0 8px",
+                                fontSize: 17,
                                 lineHeight: 1.2,
-                                fontWeight: 700,
+                                fontWeight: 800,
                               }}
                             >
                               {item.ticketType?.name} · Resale
@@ -767,7 +789,7 @@ export default function EventPage() {
                               style={{
                                 margin: "0 0 10px",
                                 color: "#e5e7eb",
-                                fontSize: 13,
+                                fontSize: 12,
                                 lineHeight: 1.55,
                               }}
                             >
@@ -779,8 +801,8 @@ export default function EventPage() {
                               style={{
                                 margin: 0,
                                 color: "#fdba74",
-                                fontSize: 11,
-                                fontWeight: 700,
+                                fontSize: 10,
+                                fontWeight: 800,
                                 textTransform: "uppercase",
                                 letterSpacing: 0.8,
                               }}
@@ -791,9 +813,10 @@ export default function EventPage() {
 
                           <div
                             style={{
-                              fontSize: 22,
+                              fontSize: 18,
                               lineHeight: 1,
                               color: "#fdba74",
+                              marginTop: 2,
                             }}
                           >
                             ↗
@@ -802,7 +825,7 @@ export default function EventPage() {
 
                         <div
                           style={{
-                            fontSize: 18,
+                            fontSize: 17,
                             fontWeight: 800,
                             color: "#fdba74",
                           }}
@@ -818,8 +841,8 @@ export default function EventPage() {
               <div>
                 <h2
                   style={{
-                    margin: "0 0 20px",
-                    fontSize: 26,
+                    margin: "0 0 18px",
+                    fontSize: 25,
                     fontWeight: 800,
                     letterSpacing: "-0.6px",
                   }}
@@ -829,15 +852,17 @@ export default function EventPage() {
 
                 <div
                   style={{
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    padding: 20,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 18,
+                    padding: 18,
                     lineHeight: 1.7,
+                    background: "rgba(255,255,255,0.02)",
                   }}
                 >
                   <p
                     style={{
                       color: "#e5e7eb",
-                      fontSize: 14,
+                      fontSize: 13,
                       margin: 0,
                       whiteSpace: "pre-wrap",
                     }}
@@ -850,8 +875,8 @@ export default function EventPage() {
               <div>
                 <h2
                   style={{
-                    margin: "0 0 20px",
-                    fontSize: 26,
+                    margin: "0 0 18px",
+                    fontSize: 25,
                     fontWeight: 800,
                     letterSpacing: "-0.6px",
                   }}
@@ -861,9 +886,11 @@ export default function EventPage() {
 
                 <div
                   style={{
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    padding: 20,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 18,
+                    padding: 18,
                     lineHeight: 1.7,
+                    background: "rgba(255,255,255,0.02)",
                   }}
                 >
                   <div>
@@ -871,8 +898,8 @@ export default function EventPage() {
                       style={{
                         marginTop: 0,
                         marginBottom: 6,
-                        fontSize: 18,
-                        fontWeight: 700,
+                        fontSize: 17,
+                        fontWeight: 800,
                       }}
                     >
                       {primaryVenueName}
@@ -880,9 +907,10 @@ export default function EventPage() {
 
                     <p
                       style={{
-                        color: "#d1d5db",
-                        fontSize: 14,
+                        color: "#9ca3af",
+                        fontSize: 13,
                         margin: 0,
+                        lineHeight: 1.5,
                       }}
                     >
                       {primaryVenueAddress}
@@ -1534,8 +1562,8 @@ export default function EventPage() {
               right: 0,
               bottom: 0,
               background: "rgba(0,0,0,0.96)",
-              borderTop: "1px solid rgba(255,255,255,0.12)",
-              padding: "14px 22px calc(14px + env(safe-area-inset-bottom))",
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+              padding: "12px 18px calc(12px + env(safe-area-inset-bottom))",
               zIndex: 50,
             }}
           >
@@ -1547,10 +1575,10 @@ export default function EventPage() {
                 color: "#111",
                 border: "none",
                 borderRadius: 18,
-                padding: "18px 20px",
-                fontSize: 15,
+                padding: "17px 20px",
+                fontSize: 14,
                 fontWeight: 800,
-                letterSpacing: "-0.3px",
+                letterSpacing: "-0.2px",
                 cursor: "pointer",
               }}
             >
@@ -1566,8 +1594,8 @@ export default function EventPage() {
               style={{
                 marginTop: 6,
                 textAlign: "center",
-                fontSize: 11,
-                fontWeight: 700,
+                fontSize: 10,
+                fontWeight: 800,
                 textTransform: "uppercase",
                 letterSpacing: 0.8,
                 color: "#9ca3af",
