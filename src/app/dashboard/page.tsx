@@ -38,6 +38,8 @@ type EventAnalytics = {
   ticketsLeft: number;
   grossRevenue: number;
   ticketTypesCount: number;
+  freeTickets: number;
+  paidTickets: number;
 };
 
 type PayoutForm = {
@@ -323,6 +325,8 @@ export default function DashboardPage() {
 
         let ticketsSold = 0;
         let grossRevenue = 0;
+        let freeTickets = 0;
+        let paidTickets = 0;
 
         for (const ticketType of eventTicketTypes) {
           const soldTicketsForType = (
@@ -333,7 +337,13 @@ export default function DashboardPage() {
           const ticketPrice = Number(ticketType.price || 0);
 
           ticketsSold += soldCount;
-          grossRevenue += soldCount * ticketPrice;
+
+          if (ticketPrice <= 0) {
+            freeTickets += soldCount;
+          } else {
+            paidTickets += soldCount;
+            grossRevenue += soldCount * ticketPrice;
+          }
         }
 
         const ticketsLeft = Math.max(totalCapacity - ticketsSold, 0);
@@ -344,6 +354,8 @@ export default function DashboardPage() {
           ticketsLeft,
           grossRevenue,
           ticketTypesCount: eventTicketTypes.length,
+          freeTickets,
+          paidTickets,
         };
       }
 
@@ -383,6 +395,8 @@ export default function DashboardPage() {
         acc.capacity += eventStats?.totalCapacity || 0;
         acc.revenue += eventStats?.grossRevenue || 0;
         acc.ticketTypes += eventStats?.ticketTypesCount || 0;
+        acc.freeTickets += eventStats?.freeTickets || 0;
+        acc.paidTickets += eventStats?.paidTickets || 0;
 
         if (isUpcoming) acc.upcoming += 1;
 
@@ -415,6 +429,8 @@ export default function DashboardPage() {
         upcoming: 0,
         soldOutEvents: 0,
         lowStockEvents: 0,
+        freeTickets: 0,
+        paidTickets: 0,
       }
     );
   }, [events, analytics]);
@@ -423,7 +439,13 @@ export default function DashboardPage() {
     totals.capacity > 0 ? (totals.sold / totals.capacity) * 100 : 0;
 
   const averageRevenuePerTicket =
-    totals.sold > 0 ? totals.revenue / totals.sold : 0;
+    totals.paidTickets > 0 ? totals.revenue / totals.paidTickets : 0;
+
+  const freeTicketShare =
+    totals.sold > 0 ? (totals.freeTickets / totals.sold) * 100 : 0;
+
+  const paidTicketShare =
+    totals.sold > 0 ? (totals.paidTickets / totals.sold) * 100 : 0;
 
   const eventInsights = useMemo(() => {
     const withStats = events.map((event) => {
@@ -433,6 +455,8 @@ export default function DashboardPage() {
         ticketsLeft: 0,
         grossRevenue: 0,
         ticketTypesCount: 0,
+        freeTickets: 0,
+        paidTickets: 0,
       };
 
       return {
@@ -450,6 +474,10 @@ export default function DashboardPage() {
       (a, b) => b.stats.ticketsSold - a.stats.ticketsSold
     )[0];
 
+    const mostFreeTickets = [...withStats].sort(
+      (a, b) => b.stats.freeTickets - a.stats.freeTickets
+    )[0];
+
     const lowestStock = [...withStats]
       .filter((item) => item.stats.totalCapacity > 0 && item.stats.ticketsLeft > 0)
       .sort((a, b) => a.stats.ticketsLeft - b.stats.ticketsLeft)[0];
@@ -457,8 +485,11 @@ export default function DashboardPage() {
     return {
       highestRevenue,
       bestSelling,
+      mostFreeTickets,
       lowestStock,
-      rankedEvents: withStats.sort((a, b) => b.stats.grossRevenue - a.stats.grossRevenue),
+      rankedEvents: withStats.sort(
+        (a, b) => b.stats.grossRevenue - a.stats.grossRevenue
+      ),
     };
   }, [events, analytics]);
 
@@ -604,10 +635,16 @@ export default function DashboardPage() {
           </p>
 
           <div className="mt-6 flex justify-center gap-3">
-            <Link href="/signup" className="bg-white px-6 py-3 text-sm font-bold text-black">
+            <Link
+              href="/signup"
+              className="bg-white px-6 py-3 text-sm font-bold text-black"
+            >
               Sign Up
             </Link>
-            <Link href="/login" className="border border-white/30 px-6 py-3 text-sm text-white">
+            <Link
+              href="/login"
+              className="border border-white/30 px-6 py-3 text-sm text-white"
+            >
               Log In
             </Link>
           </div>
@@ -671,7 +708,7 @@ export default function DashboardPage() {
               Organiser Dashboard
             </h1>
             <p className="mt-2 text-[14px] text-white/75">
-              Track sales, capacity, revenue, payouts, and event performance.
+              Track sales, free tickets, capacity, revenue, payouts, and event performance.
             </p>
           </div>
         </div>
@@ -719,12 +756,22 @@ export default function DashboardPage() {
               <StatCard
                 label="Gross Revenue"
                 value={formatMoney(totals.revenue)}
-                helper="Before payout deductions"
+                helper="Paid tickets only"
               />
               <StatCard
-                label="Tickets Sold"
+                label="Tickets Claimed / Sold"
                 value={formatNumber(totals.sold)}
                 helper={`${formatPercent(sellThroughRate)} sell-through`}
+              />
+              <StatCard
+                label="Free Tickets Claimed"
+                value={formatNumber(totals.freeTickets)}
+                helper={`${formatPercent(freeTicketShare)} of total tickets`}
+              />
+              <StatCard
+                label="Paid Tickets Sold"
+                value={formatNumber(totals.paidTickets)}
+                helper={`${formatPercent(paidTicketShare)} of total tickets`}
               />
               <StatCard
                 label="Total Capacity"
@@ -732,19 +779,9 @@ export default function DashboardPage() {
                 helper={`${formatNumber(totals.left)} tickets still available`}
               />
               <StatCard
-                label="Avg Revenue / Ticket"
+                label="Avg Revenue / Paid Ticket"
                 value={formatMoney(averageRevenuePerTicket)}
-                helper="Based on sold tickets"
-              />
-              <StatCard
-                label="Total Events"
-                value={formatNumber(totals.events)}
-                helper={`${formatNumber(totals.upcoming)} upcoming`}
-              />
-              <StatCard
-                label="Ticket Types"
-                value={formatNumber(totals.ticketTypes)}
-                helper="Across all events"
+                helper="Excludes free tickets"
               />
               <StatCard
                 label="Sold Out Events"
@@ -758,15 +795,15 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mb-8 grid gap-6 lg:grid-cols-3">
+            <div className="mb-8 grid gap-6 lg:grid-cols-4">
               <div className="border border-white/15 bg-white/[0.03] p-6">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
                   Highest Revenue Event
                 </p>
-                <h3 className="mt-3 text-[24px] font-extrabold tracking-[-0.03em]">
+                <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
                   {eventInsights.highestRevenue?.event.title || "No data yet"}
                 </h3>
-                <p className="mt-3 text-[28px] font-extrabold">
+                <p className="mt-3 text-[26px] font-extrabold">
                   {formatMoney(eventInsights.highestRevenue?.stats.grossRevenue || 0)}
                 </p>
               </div>
@@ -775,11 +812,23 @@ export default function DashboardPage() {
                 <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
                   Best Selling Event
                 </p>
-                <h3 className="mt-3 text-[24px] font-extrabold tracking-[-0.03em]">
+                <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
                   {eventInsights.bestSelling?.event.title || "No data yet"}
                 </h3>
-                <p className="mt-3 text-[28px] font-extrabold">
-                  {formatNumber(eventInsights.bestSelling?.stats.ticketsSold || 0)} sold
+                <p className="mt-3 text-[26px] font-extrabold">
+                  {formatNumber(eventInsights.bestSelling?.stats.ticketsSold || 0)} total
+                </p>
+              </div>
+
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                  Most Free Tickets
+                </p>
+                <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
+                  {eventInsights.mostFreeTickets?.event.title || "No data yet"}
+                </h3>
+                <p className="mt-3 text-[26px] font-extrabold">
+                  {formatNumber(eventInsights.mostFreeTickets?.stats.freeTickets || 0)} free
                 </p>
               </div>
 
@@ -787,10 +836,10 @@ export default function DashboardPage() {
                 <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
                   Lowest Stock Event
                 </p>
-                <h3 className="mt-3 text-[24px] font-extrabold tracking-[-0.03em]">
+                <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
                   {eventInsights.lowestStock?.event.title || "No low stock events"}
                 </h3>
-                <p className="mt-3 text-[28px] font-extrabold">
+                <p className="mt-3 text-[26px] font-extrabold">
                   {formatNumber(eventInsights.lowestStock?.stats.ticketsLeft || 0)} left
                 </p>
               </div>
@@ -802,12 +851,16 @@ export default function DashboardPage() {
                   Event Performance
                 </h2>
                 <p className="mt-3 text-[14px] leading-7 text-white/70">
-                  Ranked by gross revenue using your existing event and ticket data.
+                  Ranked by gross revenue, with free and paid ticket split included.
                 </p>
 
                 <div className="mt-6 grid gap-4">
                   {eventInsights.rankedEvents.slice(0, 5).map(({ event, stats, sellThrough }) => {
                     const status = getEventStatus(event, stats);
+                    const eventFreeShare =
+                      stats.ticketsSold > 0
+                        ? (stats.freeTickets / stats.ticketsSold) * 100
+                        : 0;
 
                     return (
                       <div key={event.id} className="border border-white/10 bg-black/30 p-4">
@@ -815,7 +868,9 @@ export default function DashboardPage() {
                           <div>
                             <p className="text-[16px] font-bold">{event.title}</p>
                             <p className="mt-1 text-[12px] text-white/45">
-                              {formatNumber(stats.ticketsSold)} sold · {formatMoney(stats.grossRevenue)}
+                              {formatNumber(stats.paidTickets)} paid ·{" "}
+                              {formatNumber(stats.freeTickets)} free ·{" "}
+                              {formatMoney(stats.grossRevenue)}
                             </p>
                           </div>
 
@@ -833,8 +888,9 @@ export default function DashboardPage() {
                           />
                         </div>
 
-                        <div className="mt-2 flex justify-between text-[11px] text-white/45">
-                          <span>{formatPercent(sellThrough)} sold</span>
+                        <div className="mt-2 flex flex-wrap justify-between gap-2 text-[11px] text-white/45">
+                          <span>{formatPercent(sellThrough)} sold/claimed</span>
+                          <span>{formatPercent(eventFreeShare)} free tickets</span>
                           <span>{formatNumber(stats.ticketsLeft)} left</span>
                         </div>
                       </div>
@@ -845,31 +901,37 @@ export default function DashboardPage() {
 
               <div className="border border-white/15 bg-white/[0.03] p-6">
                 <h2 className="text-[24px] font-extrabold tracking-[-0.03em]">
-                  Action Required
+                  Free Ticket Insight
                 </h2>
                 <p className="mt-3 text-[14px] leading-7 text-white/70">
-                  Keep your organiser account ready by completing payout details and
-                  checking low-stock events before launch day.
+                  Free tickets help track guestlist, promo access, sponsor tickets, and attendance planning.
                 </p>
 
                 <div className="mt-6 grid gap-4">
+                  <div className="border border-white/10 bg-black/30 p-4">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                      Free / Paid Split
+                    </p>
+                    <p className="mt-2 text-[20px] font-extrabold">
+                      {formatPercent(freeTicketShare)} free · {formatPercent(paidTicketShare)} paid
+                    </p>
+                  </div>
+
+                  <div className="border border-white/10 bg-black/30 p-4">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
+                      Estimated Attendance
+                    </p>
+                    <p className="mt-2 text-[20px] font-extrabold">
+                      {formatNumber(totals.sold)}
+                    </p>
+                  </div>
+
                   <div className="border border-white/10 bg-black/30 p-4">
                     <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
                       Payout Profile
                     </p>
                     <p className="mt-2 text-[20px] font-extrabold">
                       {payoutForm.account_holder_name ? "Configured" : "Incomplete"}
-                    </p>
-                  </div>
-
-                  <div className="border border-white/10 bg-black/30 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">
-                      Inventory Alert
-                    </p>
-                    <p className="mt-2 text-[20px] font-extrabold">
-                      {totals.lowStockEvents > 0
-                        ? `${totals.lowStockEvents} low stock`
-                        : "Healthy"}
                     </p>
                   </div>
                 </div>
@@ -910,10 +972,16 @@ export default function DashboardPage() {
                   ticketsLeft: 0,
                   grossRevenue: 0,
                   ticketTypesCount: 0,
+                  freeTickets: 0,
+                  paidTickets: 0,
                 };
 
                 const sellThrough = getSellThrough(stats);
                 const status = getEventStatus(event, stats);
+                const eventFreeShare =
+                  stats.ticketsSold > 0
+                    ? (stats.freeTickets / stats.ticketsSold) * 100
+                    : 0;
 
                 return (
                   <div
@@ -922,7 +990,12 @@ export default function DashboardPage() {
                   >
                     <div className="relative aspect-[0.82] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)]">
                       {event.image_url ? (
-                        <Image src={event.image_url} alt={event.title} fill className="object-cover" />
+                        <Image
+                          src={event.image_url}
+                          alt={event.title}
+                          fill
+                          className="object-cover"
+                        />
                       ) : (
                         <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
                       )}
@@ -940,6 +1013,12 @@ export default function DashboardPage() {
                           >
                             {status.label}
                           </span>
+
+                          {stats.freeTickets > 0 ? (
+                            <span className="border border-violet-400/40 bg-violet-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-violet-200">
+                              {formatNumber(stats.freeTickets)} Free
+                            </span>
+                          ) : null}
                         </div>
 
                         <h3 className="text-[28px] font-extrabold leading-tight tracking-[-0.03em]">
@@ -953,6 +1032,12 @@ export default function DashboardPage() {
                         <p className="mt-1 text-[13px] text-white/50">
                           {formatDate(event.event_date)}
                         </p>
+
+                        {event.description ? (
+                          <p className="mt-4 max-w-3xl text-[14px] leading-6 text-white/65">
+                            {event.description}
+                          </p>
+                        ) : null}
                       </div>
 
                       <div>
@@ -966,13 +1051,18 @@ export default function DashboardPage() {
                             style={{ width: `${Math.min(sellThrough, 100)}%` }}
                           />
                         </div>
+                        <div className="mt-2 flex justify-between text-[11px] text-white/45">
+                          <span>{formatPercent(eventFreeShare)} free ticket share</span>
+                          <span>{formatNumber(stats.ticketsLeft)} left</span>
+                        </div>
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-5">
-                        <StatCard label="Sold" value={stats.ticketsSold} />
+                      <div className="grid gap-3 md:grid-cols-6">
+                        <StatCard label="Total" value={stats.ticketsSold} />
+                        <StatCard label="Paid" value={stats.paidTickets} />
+                        <StatCard label="Free" value={stats.freeTickets} />
                         <StatCard label="Left" value={stats.ticketsLeft} />
                         <StatCard label="Capacity" value={stats.totalCapacity} />
-                        <StatCard label="Ticket Types" value={stats.ticketTypesCount} />
                         <StatCard label="Revenue" value={formatMoney(stats.grossRevenue)} />
                       </div>
 
