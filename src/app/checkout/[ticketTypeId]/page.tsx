@@ -472,14 +472,10 @@ export default function CheckoutPage() {
                     }}
                     className="h-12 w-full border border-white/15 bg-transparent px-4 text-white outline-none focus:border-white/60"
                   />
+
                   {Number(ticket.price) === 0 && (
                     <p className="mt-2 text-sm text-white/55">
                       Maximum {freeTicketLimit} free tickets per order.
-                    </p>
-                  )}
-                  {!soldOut && Number(ticket.price) > 0 && (
-                    <p className="mt-2 text-sm text-white/55">
-                      {ticket.quantity} ticket{ticket.quantity === 1 ? "" : "s"} remaining.
                     </p>
                   )}
                 </div>
@@ -512,13 +508,17 @@ export default function CheckoutPage() {
 
               <div className="flex items-center justify-between gap-4">
                 <span className="text-white/65">Subtotal</span>
-                <span className="font-medium">R{amounts.baseAmount.toFixed(2)}</span>
+                <span className="font-medium">
+                  R{amounts.baseAmount.toFixed(2)}
+                </span>
               </div>
 
               {serviceFee > 0 && (
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-white/65">Service Fee</span>
-                  <span className="font-medium">R{serviceFee.toFixed(2)}</span>
+                  <span className="font-medium">
+                    R{serviceFee.toFixed(2)}
+                  </span>
                 </div>
               )}
 
@@ -526,7 +526,9 @@ export default function CheckoutPage() {
                 <div className="flex items-center justify-between gap-4 text-base font-bold">
                   <span>Total Due</span>
                   <span>
-                    {isFreeTicket ? "FREE" : `R${amounts.buyerTotal.toFixed(2)}`}
+                    {isFreeTicket
+                      ? "FREE"
+                      : `R${amounts.buyerTotal.toFixed(2)}`}
                   </span>
                 </div>
               </div>
