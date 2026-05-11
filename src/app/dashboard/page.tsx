@@ -26,9 +26,10 @@ type TicketTypeRow = {
   quantity: number | string | null;
 };
 
-type TicketRow = {
+type OrderRow = {
   id: string;
   ticket_type_id: string | null;
+  quantity: number | string | null;
   status: string | null;
 };
 
@@ -57,6 +58,11 @@ const SOLD_STATUSES = new Set([
   "completed",
   "confirmed",
   "success",
+  "active",
+  "valid",
+  "issued",
+  "free",
+  "claimed",
   "checked_in",
   "checked-in",
   "checked in",
@@ -280,19 +286,19 @@ export default function DashboardPage() {
       const typedTicketTypes = (ticketTypeRows || []) as TicketTypeRow[];
       const ticketTypeIds = typedTicketTypes.map((ticketType) => ticketType.id);
 
-      let typedTickets: TicketRow[] = [];
+      let typedOrders: OrderRow[] = [];
 
       if (ticketTypeIds.length > 0) {
-        const { data: ticketRows, error: ticketsError } = await supabase
-          .from("tickets")
-          .select("id, ticket_type_id, status")
+        const { data: orderRows, error: ordersError } = await supabase
+          .from("orders")
+          .select("id, ticket_type_id, quantity, status")
           .in("ticket_type_id", ticketTypeIds);
 
-        if (ticketsError) {
-          throw new Error(ticketsError.message);
+        if (ordersError) {
+          throw new Error(ordersError.message);
         }
 
-        typedTickets = (ticketRows || []) as TicketRow[];
+        typedOrders = (orderRows || []) as OrderRow[];
       }
 
       const ticketTypesByEvent = typedTicketTypes.reduce<
@@ -303,12 +309,12 @@ export default function DashboardPage() {
         return acc;
       }, {});
 
-      const ticketsByTicketType = typedTickets.reduce<Record<string, TicketRow[]>>(
-        (acc, ticket) => {
-          const key = ticket.ticket_type_id;
+      const ordersByTicketType = typedOrders.reduce<Record<string, OrderRow[]>>(
+        (acc, order) => {
+          const key = order.ticket_type_id;
           if (!key) return acc;
           if (!acc[key]) acc[key] = [];
-          acc[key].push(ticket);
+          acc[key].push(order);
           return acc;
         },
         {}
@@ -329,12 +335,15 @@ export default function DashboardPage() {
         let paidTickets = 0;
 
         for (const ticketType of eventTicketTypes) {
-          const soldTicketsForType = (
-            ticketsByTicketType[ticketType.id] || []
-          ).filter((ticket) => isSoldTicket(ticket.status));
-
-          const soldCount = soldTicketsForType.length;
           const ticketPrice = Number(ticketType.price || 0);
+
+          const soldOrdersForType = (
+            ordersByTicketType[ticketType.id] || []
+          ).filter((order) => isSoldTicket(order.status));
+
+          const soldCount = soldOrdersForType.reduce((sum, order) => {
+            return sum + Number(order.quantity || 0);
+          }, 0);
 
           ticketsSold += soldCount;
 
@@ -635,16 +644,10 @@ export default function DashboardPage() {
           </p>
 
           <div className="mt-6 flex justify-center gap-3">
-            <Link
-              href="/signup"
-              className="bg-white px-6 py-3 text-sm font-bold text-black"
-            >
+            <Link href="/signup" className="bg-white px-6 py-3 text-sm font-bold text-black">
               Sign Up
             </Link>
-            <Link
-              href="/login"
-              className="border border-white/30 px-6 py-3 text-sm text-white"
-            >
+            <Link href="/login" className="border border-white/30 px-6 py-3 text-sm text-white">
               Log In
             </Link>
           </div>
