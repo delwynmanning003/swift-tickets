@@ -29,6 +29,14 @@ type TicketTypeRow = {
   sold_out?: boolean | null;
 };
 
+type TicketRow = {
+  id: string;
+  ticket_type_id: string | null;
+  checked_in: boolean | null;
+  status: string | null;
+  created_at?: string | null;
+};
+
 type EventAnalytics = {
   totalCapacity: number;
   ticketsSold: number;
@@ -37,6 +45,10 @@ type EventAnalytics = {
   ticketTypesCount: number;
   freeTickets: number;
   paidTickets: number;
+  issuedTickets: number;
+  checkedInTickets: number;
+  notCheckedInTickets: number;
+  checkInRate: number;
 };
 
 type PayoutForm = {
@@ -115,6 +127,20 @@ function getEventStatus(event: EventRow, stats?: EventAnalytics) {
   };
 }
 
+const emptyStats: EventAnalytics = {
+  totalCapacity: 0,
+  ticketsSold: 0,
+  ticketsLeft: 0,
+  grossRevenue: 0,
+  ticketTypesCount: 0,
+  freeTickets: 0,
+  paidTickets: 0,
+  issuedTickets: 0,
+  checkedInTickets: 0,
+  notCheckedInTickets: 0,
+  checkInRate: 0,
+};
+
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -180,9 +206,7 @@ export default function DashboardPage() {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      if (error) throw new Error(error.message);
 
       if (data) {
         setPayoutForm({
@@ -221,9 +245,7 @@ export default function DashboardPage() {
         .eq("user_id", user.id)
         .order("event_date", { ascending: false });
 
-      if (ownedEventsError) {
-        throw new Error(ownedEventsError.message);
-      }
+      if (ownedEventsError) throw new Error(ownedEventsError.message);
 
       const ownedEvents = (ownedEventsRows || []) as EventRow[];
       setEvents(ownedEvents);
@@ -254,11 +276,23 @@ export default function DashboardPage() {
         )
         .in("event_id", eventIds);
 
-      if (ticketTypesError) {
-        throw new Error(ticketTypesError.message);
-      }
+      if (ticketTypesError) throw new Error(ticketTypesError.message);
 
       const typedTicketTypes = (ticketTypeRows || []) as TicketTypeRow[];
+      const ticketTypeIds = typedTicketTypes.map((ticketType) => ticketType.id);
+
+      let typedTickets: TicketRow[] = [];
+
+      if (ticketTypeIds.length > 0) {
+        const { data: ticketRows, error: ticketsError } = await supabase
+          .from("tickets")
+          .select("id, ticket_type_id, checked_in, status, created_at")
+          .in("ticket_type_id", ticketTypeIds);
+
+        if (ticketsError) throw new Error(ticketsError.message);
+
+        typedTickets = (ticketRows || []) as TicketRow[];
+      }
 
       const ticketTypesByEvent = typedTicketTypes.reduce<
         Record<string, TicketTypeRow[]>
@@ -267,6 +301,17 @@ export default function DashboardPage() {
         acc[ticketType.event_id].push(ticketType);
         return acc;
       }, {});
+
+      const ticketsByTicketType = typedTickets.reduce<Record<string, TicketRow[]>>(
+        (acc, ticket) => {
+          const key = ticket.ticket_type_id;
+          if (!key) return acc;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(ticket);
+          return acc;
+        },
+        {}
+      );
 
       const analyticsMap: Record<string, EventAnalytics> = {};
 
@@ -281,12 +326,19 @@ export default function DashboardPage() {
         let grossRevenue = 0;
         let freeTickets = 0;
         let paidTickets = 0;
+        let issuedTickets = 0;
+        let checkedInTickets = 0;
 
         for (const ticketType of eventTicketTypes) {
           const ticketPrice = Number(ticketType.price || 0);
           const soldCount = Number(ticketType.sold_count || 0);
+          const ticketsForType = ticketsByTicketType[ticketType.id] || [];
 
           ticketsSold += soldCount;
+          issuedTickets += ticketsForType.length;
+          checkedInTickets += ticketsForType.filter(
+            (ticket) => ticket.checked_in === true
+          ).length;
 
           if (ticketPrice <= 0) {
             freeTickets += soldCount;
@@ -300,6 +352,10 @@ export default function DashboardPage() {
           return sum + Number(ticketType.remaining_quantity || 0);
         }, 0);
 
+        const notCheckedInTickets = Math.max(issuedTickets - checkedInTickets, 0);
+        const checkInRate =
+          issuedTickets > 0 ? (checkedInTickets / issuedTickets) * 100 : 0;
+
         analyticsMap[event.id] = {
           totalCapacity,
           ticketsSold,
@@ -308,6 +364,10 @@ export default function DashboardPage() {
           ticketTypesCount: eventTicketTypes.length,
           freeTickets,
           paidTickets,
+          issuedTickets,
+          checkedInTickets,
+          notCheckedInTickets,
+          checkInRate,
         };
       }
 
@@ -321,15 +381,11 @@ export default function DashboardPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!checkingAuth) {
-      loadDashboard();
-    }
+    if (!checkingAuth) loadDashboard();
   }, [checkingAuth, loadDashboard]);
 
   useEffect(() => {
-    if (user?.id) {
-      loadPayoutProfile();
-    }
+    if (user?.id) loadPayoutProfile();
   }, [user, loadPayoutProfile]);
 
   const totals = useMemo(() => {
@@ -338,7 +394,6 @@ export default function DashboardPage() {
         const eventStats = analytics[event.id];
         const eventDate = event.event_date ? new Date(event.event_date) : null;
         const isUpcoming = eventDate ? eventDate.getTime() >= Date.now() : false;
-
         const sellThrough = getSellThrough(eventStats);
 
         acc.events += 1;
@@ -349,6 +404,8 @@ export default function DashboardPage() {
         acc.ticketTypes += eventStats?.ticketTypesCount || 0;
         acc.freeTickets += eventStats?.freeTickets || 0;
         acc.paidTickets += eventStats?.paidTickets || 0;
+        acc.issuedTickets += eventStats?.issuedTickets || 0;
+        acc.checkedInTickets += eventStats?.checkedInTickets || 0;
 
         if (isUpcoming) acc.upcoming += 1;
 
@@ -383,6 +440,8 @@ export default function DashboardPage() {
         lowStockEvents: 0,
         freeTickets: 0,
         paidTickets: 0,
+        issuedTickets: 0,
+        checkedInTickets: 0,
       }
     );
   }, [events, analytics]);
@@ -399,17 +458,14 @@ export default function DashboardPage() {
   const paidTicketShare =
     totals.sold > 0 ? (totals.paidTickets / totals.sold) * 100 : 0;
 
+  const totalCheckInRate =
+    totals.issuedTickets > 0
+      ? (totals.checkedInTickets / totals.issuedTickets) * 100
+      : 0;
+
   const eventInsights = useMemo(() => {
     const withStats = events.map((event) => {
-      const stats = analytics[event.id] || {
-        totalCapacity: 0,
-        ticketsSold: 0,
-        ticketsLeft: 0,
-        grossRevenue: 0,
-        ticketTypesCount: 0,
-        freeTickets: 0,
-        paidTickets: 0,
-      };
+      const stats = analytics[event.id] || emptyStats;
 
       return {
         event,
@@ -430,6 +486,10 @@ export default function DashboardPage() {
       (a, b) => b.stats.freeTickets - a.stats.freeTickets
     )[0];
 
+    const highestCheckIn = [...withStats].sort(
+      (a, b) => b.stats.checkInRate - a.stats.checkInRate
+    )[0];
+
     const lowestStock = [...withStats]
       .filter((item) => item.stats.totalCapacity > 0 && item.stats.ticketsLeft > 0)
       .sort((a, b) => a.stats.ticketsLeft - b.stats.ticketsLeft)[0];
@@ -438,6 +498,7 @@ export default function DashboardPage() {
       highestRevenue,
       bestSelling,
       mostFreeTickets,
+      highestCheckIn,
       lowestStock,
       rankedEvents: withStats.sort(
         (a, b) => b.stats.grossRevenue - a.stats.grossRevenue
@@ -460,9 +521,7 @@ export default function DashboardPage() {
         .select("id")
         .eq("event_id", eventId);
 
-      if (ticketTypesError) {
-        throw new Error(ticketTypesError.message);
-      }
+      if (ticketTypesError) throw new Error(ticketTypesError.message);
 
       const ticketTypeIds = (ticketTypeRows || []).map((row: any) => row.id);
 
@@ -472,18 +531,14 @@ export default function DashboardPage() {
           .delete()
           .in("ticket_type_id", ticketTypeIds);
 
-        if (deleteTicketsError) {
-          throw new Error(deleteTicketsError.message);
-        }
+        if (deleteTicketsError) throw new Error(deleteTicketsError.message);
 
         const { error: deleteTicketTypesError } = await supabase
           .from("ticket_types")
           .delete()
           .eq("event_id", eventId);
 
-        if (deleteTicketTypesError) {
-          throw new Error(deleteTicketTypesError.message);
-        }
+        if (deleteTicketTypesError) throw new Error(deleteTicketTypesError.message);
       }
 
       const { error: deleteEventError } = await supabase
@@ -492,9 +547,7 @@ export default function DashboardPage() {
         .eq("id", eventId)
         .eq("user_id", user.id);
 
-      if (deleteEventError) {
-        throw new Error(deleteEventError.message);
-      }
+      if (deleteEventError) throw new Error(deleteEventError.message);
 
       await loadDashboard();
     } catch (error) {
@@ -532,9 +585,7 @@ export default function DashboardPage() {
         .from("organizer_profiles")
         .upsert(payload, { onConflict: "user_id" });
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      if (error) throw new Error(error.message);
 
       await loadPayoutProfile();
       alert("Payout details saved successfully.");
@@ -654,7 +705,7 @@ export default function DashboardPage() {
               Organiser Dashboard
             </h1>
             <p className="mt-2 text-[14px] text-white/75">
-              Track sales, free tickets, capacity, revenue, payouts, and event performance.
+              Track sales, free tickets, check-ins, capacity, revenue, payouts, and event performance.
             </p>
           </div>
         </div>
@@ -699,53 +750,19 @@ export default function DashboardPage() {
         {activeSection === "overview" && (
           <>
             <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Gross Revenue"
-                value={formatMoney(totals.revenue)}
-                helper="Paid tickets only"
-              />
-              <StatCard
-                label="Tickets Claimed / Sold"
-                value={formatNumber(totals.sold)}
-                helper={`${formatPercent(sellThroughRate)} sell-through`}
-              />
-              <StatCard
-                label="Free Tickets Claimed"
-                value={formatNumber(totals.freeTickets)}
-                helper={`${formatPercent(freeTicketShare)} of total tickets`}
-              />
-              <StatCard
-                label="Paid Tickets Sold"
-                value={formatNumber(totals.paidTickets)}
-                helper={`${formatPercent(paidTicketShare)} of total tickets`}
-              />
-              <StatCard
-                label="Total Capacity"
-                value={formatNumber(totals.capacity)}
-                helper={`${formatNumber(totals.left)} tickets still available`}
-              />
-              <StatCard
-                label="Avg Revenue / Paid Ticket"
-                value={formatMoney(averageRevenuePerTicket)}
-                helper="Excludes free tickets"
-              />
-              <StatCard
-                label="Sold Out Events"
-                value={formatNumber(totals.soldOutEvents)}
-                helper="Events with no tickets left"
-              />
-              <StatCard
-                label="Low Stock Events"
-                value={formatNumber(totals.lowStockEvents)}
-                helper="Events above 80% sold"
-              />
+              <StatCard label="Gross Revenue" value={formatMoney(totals.revenue)} helper="Paid tickets only" />
+              <StatCard label="Tickets Claimed / Sold" value={formatNumber(totals.sold)} helper={`${formatPercent(sellThroughRate)} sell-through`} />
+              <StatCard label="Free Tickets Claimed" value={formatNumber(totals.freeTickets)} helper={`${formatPercent(freeTicketShare)} of total tickets`} />
+              <StatCard label="Paid Tickets Sold" value={formatNumber(totals.paidTickets)} helper={`${formatPercent(paidTicketShare)} of total tickets`} />
+              <StatCard label="Total Capacity" value={formatNumber(totals.capacity)} helper={`${formatNumber(totals.left)} tickets still available`} />
+              <StatCard label="Checked In" value={formatNumber(totals.checkedInTickets)} helper={`${formatPercent(totalCheckInRate)} check-in rate`} />
+              <StatCard label="Tickets Issued" value={formatNumber(totals.issuedTickets)} helper="Generated QR tickets" />
+              <StatCard label="Sold Out Events" value={formatNumber(totals.soldOutEvents)} helper="Events with no tickets left" />
             </div>
 
             <div className="mb-8 grid gap-6 lg:grid-cols-4">
               <div className="border border-white/15 bg-white/[0.03] p-6">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                  Highest Revenue Event
-                </p>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">Highest Revenue Event</p>
                 <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
                   {eventInsights.highestRevenue?.event.title || "No data yet"}
                 </h3>
@@ -755,9 +772,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="border border-white/15 bg-white/[0.03] p-6">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                  Best Selling Event
-                </p>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">Best Selling Event</p>
                 <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
                   {eventInsights.bestSelling?.event.title || "No data yet"}
                 </h3>
@@ -767,9 +782,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="border border-white/15 bg-white/[0.03] p-6">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                  Most Free Tickets
-                </p>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">Most Free Tickets</p>
                 <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
                   {eventInsights.mostFreeTickets?.event.title || "No data yet"}
                 </h3>
@@ -779,14 +792,12 @@ export default function DashboardPage() {
               </div>
 
               <div className="border border-white/15 bg-white/[0.03] p-6">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                  Lowest Stock Event
-                </p>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">Highest Check-In Rate</p>
                 <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
-                  {eventInsights.lowestStock?.event.title || "No low stock events"}
+                  {eventInsights.highestCheckIn?.event.title || "No data yet"}
                 </h3>
                 <p className="mt-3 text-[26px] font-extrabold">
-                  {formatNumber(eventInsights.lowestStock?.stats.ticketsLeft || 0)} left
+                  {formatPercent(eventInsights.highestCheckIn?.stats.checkInRate || 0)}
                 </p>
               </div>
             </div>
@@ -796,16 +807,7 @@ export default function DashboardPage() {
         {activeSection === "events" && (
           <div className="grid gap-6">
             {events.map((event) => {
-              const stats = analytics[event.id] || {
-                totalCapacity: 0,
-                ticketsSold: 0,
-                ticketsLeft: 0,
-                grossRevenue: 0,
-                ticketTypesCount: 0,
-                freeTickets: 0,
-                paidTickets: 0,
-              };
-
+              const stats = analytics[event.id] || emptyStats;
               const sellThrough = getSellThrough(stats);
               const status = getEventStatus(event, stats);
               const eventFreeShare =
@@ -820,12 +822,7 @@ export default function DashboardPage() {
                 >
                   <div className="relative aspect-[0.82] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)]">
                     {event.image_url ? (
-                      <Image
-                        src={event.image_url}
-                        alt={event.title}
-                        fill
-                        className="object-cover"
-                      />
+                      <Image src={event.image_url} alt={event.title} fill className="object-cover" />
                     ) : (
                       <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
                     )}
@@ -838,9 +835,7 @@ export default function DashboardPage() {
                           {event.category || "Uncategorised"}
                         </span>
 
-                        <span
-                          className={`border px-3 py-1 text-[11px] uppercase tracking-[0.12em] ${status.className}`}
-                        >
+                        <span className={`border px-3 py-1 text-[11px] uppercase tracking-[0.12em] ${status.className}`}>
                           {status.label}
                         </span>
 
@@ -862,12 +857,6 @@ export default function DashboardPage() {
                       <p className="mt-1 text-[13px] text-white/50">
                         {formatDate(event.event_date)}
                       </p>
-
-                      {event.description ? (
-                        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-white/65">
-                          {event.description}
-                        </p>
-                      ) : null}
                     </div>
 
                     <div>
@@ -876,13 +865,20 @@ export default function DashboardPage() {
                         <span>{formatPercent(sellThrough)}</span>
                       </div>
                       <div className="h-2 overflow-hidden bg-white/10">
-                        <div
-                          className="h-full bg-white"
-                          style={{ width: `${Math.min(sellThrough, 100)}%` }}
-                        />
+                        <div className="h-full bg-white" style={{ width: `${Math.min(sellThrough, 100)}%` }} />
                       </div>
-                      <div className="mt-2 flex justify-between text-[11px] text-white/45">
+
+                      <div className="mt-4 mb-2 flex justify-between text-[12px] text-white/50">
+                        <span>Check-in rate</span>
+                        <span>{formatPercent(stats.checkInRate)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden bg-white/10">
+                        <div className="h-full bg-emerald-300" style={{ width: `${Math.min(stats.checkInRate, 100)}%` }} />
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap justify-between gap-2 text-[11px] text-white/45">
                         <span>{formatPercent(eventFreeShare)} free ticket share</span>
+                        <span>{formatNumber(stats.notCheckedInTickets)} not checked in</span>
                         <span>{formatNumber(stats.ticketsLeft)} left</span>
                       </div>
                     </div>
@@ -891,23 +887,20 @@ export default function DashboardPage() {
                       <StatCard label="Total" value={stats.ticketsSold} />
                       <StatCard label="Paid" value={stats.paidTickets} />
                       <StatCard label="Free" value={stats.freeTickets} />
+                      <StatCard label="Issued" value={stats.issuedTickets} />
+                      <StatCard label="Checked In" value={stats.checkedInTickets} />
+                      <StatCard label="Not In" value={stats.notCheckedInTickets} />
                       <StatCard label="Left" value={stats.ticketsLeft} />
                       <StatCard label="Capacity" value={stats.totalCapacity} />
                       <StatCard label="Revenue" value={formatMoney(stats.grossRevenue)} />
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                      <Link
-                        href={`/events/${event.id}`}
-                        className="border border-white/25 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
-                      >
+                      <Link href={`/events/${event.id}`} className="border border-white/25 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black">
                         View Event
                       </Link>
 
-                      <Link
-                        href={`/edit-event/${event.id}`}
-                        className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
-                      >
+                      <Link href={`/edit-event/${event.id}`} className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90">
                         Edit Event / Tickets
                       </Link>
 
@@ -933,9 +926,6 @@ export default function DashboardPage() {
               <h2 className="text-[30px] font-extrabold tracking-[-0.03em]">
                 Payout Details
               </h2>
-              <p className="mt-3 max-w-2xl text-[14px] leading-7 text-white/70">
-                Add the account details Swift Tickets should use for your event payouts.
-              </p>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 {[
@@ -1005,10 +995,6 @@ export default function DashboardPage() {
                   }
                 />
               </div>
-
-              <p className="mt-6 text-[13px] leading-7 text-white/65">
-                Your payout profile is linked to your organiser account and can be updated anytime.
-              </p>
             </div>
           </div>
         )}
