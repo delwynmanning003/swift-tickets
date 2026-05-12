@@ -37,6 +37,24 @@ type TicketRow = {
   created_at?: string | null;
 };
 
+type OrderRow = {
+  id: string;
+  event_id: string | null;
+  ticket_type_id: string | null;
+  quantity: number | string | null;
+  status: string | null;
+  created_at: string | null;
+  buyer_total?: number | string | null;
+};
+
+type DailySale = {
+  date: string;
+  totalTickets: number;
+  freeTickets: number;
+  paidTickets: number;
+  revenue: number;
+};
+
 type EventAnalytics = {
   totalCapacity: number;
   ticketsSold: number;
@@ -49,6 +67,7 @@ type EventAnalytics = {
   checkedInTickets: number;
   notCheckedInTickets: number;
   checkInRate: number;
+  dailySales: DailySale[];
 };
 
 type PayoutForm = {
@@ -59,6 +78,21 @@ type PayoutForm = {
   account_type: string;
   branch_code: string;
   verification_status: string;
+};
+
+const emptyStats: EventAnalytics = {
+  totalCapacity: 0,
+  ticketsSold: 0,
+  ticketsLeft: 0,
+  grossRevenue: 0,
+  ticketTypesCount: 0,
+  freeTickets: 0,
+  paidTickets: 0,
+  issuedTickets: 0,
+  checkedInTickets: 0,
+  notCheckedInTickets: 0,
+  checkInRate: 0,
+  dailySales: [],
 };
 
 function formatMoney(value: number) {
@@ -88,6 +122,25 @@ function formatDate(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatShortDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleDateString("en-ZA", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function getDateKey(value?: string | null) {
+  if (!value) return "Unknown";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+
+  return date.toISOString().slice(0, 10);
 }
 
 function getSellThrough(stats?: EventAnalytics) {
@@ -127,19 +180,62 @@ function getEventStatus(event: EventRow, stats?: EventAnalytics) {
   };
 }
 
-const emptyStats: EventAnalytics = {
-  totalCapacity: 0,
-  ticketsSold: 0,
-  ticketsLeft: 0,
-  grossRevenue: 0,
-  ticketTypesCount: 0,
-  freeTickets: 0,
-  paidTickets: 0,
-  issuedTickets: 0,
-  checkedInTickets: 0,
-  notCheckedInTickets: 0,
-  checkInRate: 0,
-};
+function SimpleBarChart({
+  data,
+  type,
+}: {
+  data: DailySale[];
+  type: "tickets" | "revenue";
+}) {
+  const recent = data.slice(-10);
+  const maxValue = Math.max(
+    1,
+    ...recent.map((item) =>
+      type === "revenue" ? item.revenue : item.totalTickets
+    )
+  );
+
+  if (recent.length === 0) {
+    return (
+      <div className="border border-white/10 bg-black/30 p-4 text-sm text-white/45">
+        No timeline data yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-white/10 bg-black/30 p-4">
+      <div className="flex h-40 items-end gap-2">
+        {recent.map((item) => {
+          const value = type === "revenue" ? item.revenue : item.totalTickets;
+          const height = Math.max(6, (value / maxValue) * 100);
+
+          return (
+            <div
+              key={`${item.date}-${type}`}
+              className="flex flex-1 flex-col items-center gap-2"
+            >
+              <div className="flex h-28 w-full items-end">
+                <div
+                  className="w-full bg-white"
+                  style={{ height: `${height}%` }}
+                  title={
+                    type === "revenue"
+                      ? `${formatMoney(item.revenue)} on ${item.date}`
+                      : `${item.totalTickets} tickets on ${item.date}`
+                  }
+                />
+              </div>
+              <span className="text-[10px] text-white/40">
+                {formatShortDate(item.date)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -282,6 +378,7 @@ export default function DashboardPage() {
       const ticketTypeIds = typedTicketTypes.map((ticketType) => ticketType.id);
 
       let typedTickets: TicketRow[] = [];
+      let typedOrders: OrderRow[] = [];
 
       if (ticketTypeIds.length > 0) {
         const { data: ticketRows, error: ticketsError } = await supabase
@@ -292,6 +389,15 @@ export default function DashboardPage() {
         if (ticketsError) throw new Error(ticketsError.message);
 
         typedTickets = (ticketRows || []) as TicketRow[];
+
+        const { data: orderRows, error: ordersError } = await supabase
+          .from("orders")
+          .select("id, event_id, ticket_type_id, quantity, status, created_at, buyer_total")
+          .in("ticket_type_id", ticketTypeIds);
+
+        if (ordersError) throw new Error(ordersError.message);
+
+        typedOrders = (orderRows || []) as OrderRow[];
       }
 
       const ticketTypesByEvent = typedTicketTypes.reduce<
@@ -313,10 +419,43 @@ export default function DashboardPage() {
         {}
       );
 
+      const ticketTypeById = typedTicketTypes.reduce<Record<string, TicketTypeRow>>(
+        (acc, ticketType) => {
+          acc[ticketType.id] = ticketType;
+          return acc;
+        },
+        {}
+      );
+
+      const eventIdByTicketTypeId = typedTicketTypes.reduce<Record<string, string>>(
+        (acc, ticketType) => {
+          acc[ticketType.id] = ticketType.event_id;
+          return acc;
+        },
+        {}
+      );
+
+      const ordersByEvent = typedOrders.reduce<Record<string, OrderRow[]>>(
+        (acc, order) => {
+          const eventId =
+            order.event_id ||
+            (order.ticket_type_id
+              ? eventIdByTicketTypeId[order.ticket_type_id]
+              : null);
+
+          if (!eventId) return acc;
+          if (!acc[eventId]) acc[eventId] = [];
+          acc[eventId].push(order);
+          return acc;
+        },
+        {}
+      );
+
       const analyticsMap: Record<string, EventAnalytics> = {};
 
       for (const event of ownedEvents) {
         const eventTicketTypes = ticketTypesByEvent[event.id] || [];
+        const eventOrders = ordersByEvent[event.id] || [];
 
         const totalCapacity = eventTicketTypes.reduce((sum, ticketType) => {
           return sum + Number(ticketType.quantity || 0);
@@ -348,6 +487,50 @@ export default function DashboardPage() {
           }
         }
 
+        const dailySalesMap = eventOrders.reduce<Record<string, DailySale>>(
+          (acc, order) => {
+            const quantity = Number(order.quantity || 0);
+
+            // IMPORTANT FIX:
+            // Timeline now counts all real order quantities, even if event_id/status/payment_status is messy.
+            if (quantity <= 0) return acc;
+
+            const dateKey = getDateKey(order.created_at);
+            const buyerTotal = Number(order.buyer_total || 0);
+            const ticketType = order.ticket_type_id
+              ? ticketTypeById[order.ticket_type_id]
+              : null;
+            const ticketPrice = Number(ticketType?.price || 0);
+            const isFree = ticketPrice <= 0 || buyerTotal <= 0;
+
+            if (!acc[dateKey]) {
+              acc[dateKey] = {
+                date: dateKey,
+                totalTickets: 0,
+                freeTickets: 0,
+                paidTickets: 0,
+                revenue: 0,
+              };
+            }
+
+            acc[dateKey].totalTickets += quantity;
+
+            if (isFree) {
+              acc[dateKey].freeTickets += quantity;
+            } else {
+              acc[dateKey].paidTickets += quantity;
+              acc[dateKey].revenue += buyerTotal;
+            }
+
+            return acc;
+          },
+          {}
+        );
+
+        const dailySales = Object.values(dailySalesMap).sort((a, b) =>
+          a.date.localeCompare(b.date)
+        );
+
         const ticketsLeft = eventTicketTypes.reduce((sum, ticketType) => {
           return sum + Number(ticketType.remaining_quantity || 0);
         }, 0);
@@ -368,6 +551,7 @@ export default function DashboardPage() {
           checkedInTickets,
           notCheckedInTickets,
           checkInRate,
+          dailySales,
         };
       }
 
@@ -378,9 +562,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
-
-  useEffect(() => {
+  }, [user]);  useEffect(() => {
     if (!checkingAuth) loadDashboard();
   }, [checkingAuth, loadDashboard]);
 
@@ -462,6 +644,33 @@ export default function DashboardPage() {
     totals.issuedTickets > 0
       ? (totals.checkedInTickets / totals.issuedTickets) * 100
       : 0;
+
+  const allDailySales = useMemo(() => {
+    const merged: Record<string, DailySale> = {};
+
+    events.forEach((event) => {
+      const stats = analytics[event.id] || emptyStats;
+
+      stats.dailySales.forEach((item) => {
+        if (!merged[item.date]) {
+          merged[item.date] = {
+            date: item.date,
+            totalTickets: 0,
+            freeTickets: 0,
+            paidTickets: 0,
+            revenue: 0,
+          };
+        }
+
+        merged[item.date].totalTickets += item.totalTickets;
+        merged[item.date].freeTickets += item.freeTickets;
+        merged[item.date].paidTickets += item.paidTickets;
+        merged[item.date].revenue += item.revenue;
+      });
+    });
+
+    return Object.values(merged).sort((a, b) => a.date.localeCompare(b.date));
+  }, [events, analytics]);
 
   const eventInsights = useMemo(() => {
     const withStats = events.map((event) => {
@@ -705,7 +914,7 @@ export default function DashboardPage() {
               Organiser Dashboard
             </h1>
             <p className="mt-2 text-[14px] text-white/75">
-              Track sales, free tickets, check-ins, capacity, revenue, payouts, and event performance.
+              Track sales, free tickets, check-ins, revenue timelines, payouts, and event performance.
             </p>
           </div>
         </div>
@@ -757,7 +966,33 @@ export default function DashboardPage() {
               <StatCard label="Total Capacity" value={formatNumber(totals.capacity)} helper={`${formatNumber(totals.left)} tickets still available`} />
               <StatCard label="Checked In" value={formatNumber(totals.checkedInTickets)} helper={`${formatPercent(totalCheckInRate)} check-in rate`} />
               <StatCard label="Tickets Issued" value={formatNumber(totals.issuedTickets)} helper="Generated QR tickets" />
-              <StatCard label="Sold Out Events" value={formatNumber(totals.soldOutEvents)} helper="Events with no tickets left" />
+              <StatCard label="Avg Revenue / Paid Ticket" value={formatMoney(averageRevenuePerTicket)} helper="Excludes free tickets" />
+            </div>
+
+            <div className="mb-8 grid gap-6 lg:grid-cols-2">
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <h2 className="text-[24px] font-extrabold tracking-[-0.03em]">
+                  Ticket Sales Timeline
+                </h2>
+                <p className="mt-2 text-[13px] text-white/55">
+                  Daily paid and free ticket claims across all your events.
+                </p>
+                <div className="mt-5">
+                  <SimpleBarChart data={allDailySales} type="tickets" />
+                </div>
+              </div>
+
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <h2 className="text-[24px] font-extrabold tracking-[-0.03em]">
+                  Revenue Timeline
+                </h2>
+                <p className="mt-2 text-[13px] text-white/55">
+                  Daily revenue from paid ticket orders.
+                </p>
+                <div className="mt-5">
+                  <SimpleBarChart data={allDailySales} type="revenue" />
+                </div>
+              </div>
             </div>
 
             <div className="mb-8 grid gap-6 lg:grid-cols-4">
@@ -893,6 +1128,18 @@ export default function DashboardPage() {
                       <StatCard label="Left" value={stats.ticketsLeft} />
                       <StatCard label="Capacity" value={stats.totalCapacity} />
                       <StatCard label="Revenue" value={formatMoney(stats.grossRevenue)} />
+                    </div>
+
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      <div>
+                        <h4 className="mb-3 text-[15px] font-bold">Daily Ticket Claims</h4>
+                        <SimpleBarChart data={stats.dailySales} type="tickets" />
+                      </div>
+
+                      <div>
+                        <h4 className="mb-3 text-[15px] font-bold">Daily Revenue</h4>
+                        <SimpleBarChart data={stats.dailySales} type="revenue" />
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
