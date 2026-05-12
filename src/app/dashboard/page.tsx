@@ -24,15 +24,9 @@ type TicketTypeRow = {
   name: string;
   price: number | string | null;
   quantity: number | string | null;
-};
-
-type OrderRow = {
-  id: string;
-  event_id: string | null;
-  ticket_type_id: string | null;
-  quantity: number | string | null;
-  status: string | null;
-  buyer_total?: number | string | null;
+  remaining_quantity?: number | string | null;
+  sold_count?: number | string | null;
+  sold_out?: boolean | null;
 };
 
 type EventAnalytics = {
@@ -54,29 +48,6 @@ type PayoutForm = {
   branch_code: string;
   verification_status: string;
 };
-
-const SOLD_STATUSES = new Set([
-  "paid",
-  "completed",
-  "confirmed",
-  "success",
-  "active",
-  "valid",
-  "issued",
-  "free",
-  "claimed",
-  "checked_in",
-  "checked-in",
-  "checked in",
-]);
-
-function normalizeStatus(status?: string | null) {
-  return (status || "").trim().toLowerCase();
-}
-
-function isSoldTicket(status?: string | null) {
-  return SOLD_STATUSES.has(normalizeStatus(status));
-}
 
 function formatMoney(value: number) {
   return `R${value.toFixed(2)}`;
@@ -278,7 +249,9 @@ export default function DashboardPage() {
 
       const { data: ticketTypeRows, error: ticketTypesError } = await supabase
         .from("ticket_types")
-        .select("id, event_id, name, price, quantity")
+        .select(
+          "id, event_id, name, price, quantity, remaining_quantity, sold_count, sold_out"
+        )
         .in("event_id", eventIds);
 
       if (ticketTypesError) {
@@ -286,17 +259,6 @@ export default function DashboardPage() {
       }
 
       const typedTicketTypes = (ticketTypeRows || []) as TicketTypeRow[];
-
-      const { data: orderRows, error: ordersError } = await supabase
-        .from("orders")
-        .select("id, event_id, ticket_type_id, quantity, status, buyer_total")
-        .in("event_id", eventIds);
-
-      if (ordersError) {
-        throw new Error(ordersError.message);
-      }
-
-      const typedOrders = (orderRows || []) as OrderRow[];
 
       const ticketTypesByEvent = typedTicketTypes.reduce<
         Record<string, TicketTypeRow[]>
@@ -306,31 +268,10 @@ export default function DashboardPage() {
         return acc;
       }, {});
 
-      const ticketTypeById = typedTicketTypes.reduce<
-        Record<string, TicketTypeRow>
-      >((acc, ticketType) => {
-        acc[ticketType.id] = ticketType;
-        return acc;
-      }, {});
-
-      const ordersByEvent = typedOrders.reduce<Record<string, OrderRow[]>>(
-        (acc, order) => {
-          const key = order.event_id;
-          if (!key) return acc;
-          if (!acc[key]) acc[key] = [];
-          acc[key].push(order);
-          return acc;
-        },
-        {}
-      );
-
       const analyticsMap: Record<string, EventAnalytics> = {};
 
       for (const event of ownedEvents) {
         const eventTicketTypes = ticketTypesByEvent[event.id] || [];
-        const eventOrders = (ordersByEvent[event.id] || []).filter((order) =>
-          isSoldTicket(order.status)
-        );
 
         const totalCapacity = eventTicketTypes.reduce((sum, ticketType) => {
           return sum + Number(ticketType.quantity || 0);
@@ -341,27 +282,23 @@ export default function DashboardPage() {
         let freeTickets = 0;
         let paidTickets = 0;
 
-        for (const order of eventOrders) {
-          const orderQuantity = Number(order.quantity || 0);
-          const orderBuyerTotal = Number(order.buyer_total || 0);
+        for (const ticketType of eventTicketTypes) {
+          const ticketPrice = Number(ticketType.price || 0);
+          const soldCount = Number(ticketType.sold_count || 0);
 
-          const ticketType = order.ticket_type_id
-            ? ticketTypeById[order.ticket_type_id]
-            : null;
+          ticketsSold += soldCount;
 
-          const ticketPrice = Number(ticketType?.price || 0);
-
-          ticketsSold += orderQuantity;
-
-          if (ticketPrice <= 0 || orderBuyerTotal <= 0) {
-            freeTickets += orderQuantity;
+          if (ticketPrice <= 0) {
+            freeTickets += soldCount;
           } else {
-            paidTickets += orderQuantity;
-            grossRevenue += orderBuyerTotal > 0 ? orderBuyerTotal : ticketPrice * orderQuantity;
+            paidTickets += soldCount;
+            grossRevenue += soldCount * ticketPrice;
           }
         }
 
-        const ticketsLeft = Math.max(totalCapacity - ticketsSold, 0);
+        const ticketsLeft = eventTicketTypes.reduce((sum, ticketType) => {
+          return sum + Number(ticketType.remaining_quantity || 0);
+        }, 0);
 
         analyticsMap[event.id] = {
           totalCapacity,
@@ -803,6 +740,56 @@ export default function DashboardPage() {
                 helper="Events above 80% sold"
               />
             </div>
+
+            <div className="mb-8 grid gap-6 lg:grid-cols-4">
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                  Highest Revenue Event
+                </p>
+                <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
+                  {eventInsights.highestRevenue?.event.title || "No data yet"}
+                </h3>
+                <p className="mt-3 text-[26px] font-extrabold">
+                  {formatMoney(eventInsights.highestRevenue?.stats.grossRevenue || 0)}
+                </p>
+              </div>
+
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                  Best Selling Event
+                </p>
+                <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
+                  {eventInsights.bestSelling?.event.title || "No data yet"}
+                </h3>
+                <p className="mt-3 text-[26px] font-extrabold">
+                  {formatNumber(eventInsights.bestSelling?.stats.ticketsSold || 0)} total
+                </p>
+              </div>
+
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                  Most Free Tickets
+                </p>
+                <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
+                  {eventInsights.mostFreeTickets?.event.title || "No data yet"}
+                </h3>
+                <p className="mt-3 text-[26px] font-extrabold">
+                  {formatNumber(eventInsights.mostFreeTickets?.stats.freeTickets || 0)} free
+                </p>
+              </div>
+
+              <div className="border border-white/15 bg-white/[0.03] p-6">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                  Lowest Stock Event
+                </p>
+                <h3 className="mt-3 text-[22px] font-extrabold tracking-[-0.03em]">
+                  {eventInsights.lowestStock?.event.title || "No low stock events"}
+                </h3>
+                <p className="mt-3 text-[26px] font-extrabold">
+                  {formatNumber(eventInsights.lowestStock?.stats.ticketsLeft || 0)} left
+                </p>
+              </div>
+            </div>
           </>
         )}
 
@@ -819,45 +806,120 @@ export default function DashboardPage() {
                 paidTickets: 0,
               };
 
+              const sellThrough = getSellThrough(stats);
+              const status = getEventStatus(event, stats);
+              const eventFreeShare =
+                stats.ticketsSold > 0
+                  ? (stats.freeTickets / stats.ticketsSold) * 100
+                  : 0;
+
               return (
                 <div
                   key={event.id}
-                  className="border border-white/15 bg-white/[0.03] p-5"
+                  className="grid gap-5 border border-white/15 bg-white/[0.03] p-5 lg:grid-cols-[220px_1fr]"
                 >
-                  <h3 className="text-[28px] font-extrabold">{event.title}</h3>
-
-                  <div className="mt-5 grid gap-3 md:grid-cols-6">
-                    <StatCard label="Total" value={stats.ticketsSold} />
-                    <StatCard label="Paid" value={stats.paidTickets} />
-                    <StatCard label="Free" value={stats.freeTickets} />
-                    <StatCard label="Left" value={stats.ticketsLeft} />
-                    <StatCard label="Capacity" value={stats.totalCapacity} />
-                    <StatCard label="Revenue" value={formatMoney(stats.grossRevenue)} />
+                  <div className="relative aspect-[0.82] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)]">
+                    {event.image_url ? (
+                      <Image
+                        src={event.image_url}
+                        alt={event.title}
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
+                    )}
                   </div>
 
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <Link
-                      href={`/events/${event.id}`}
-                      className="border border-white/25 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
-                    >
-                      View Event
-                    </Link>
+                  <div className="flex flex-col justify-between gap-6">
+                    <div>
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span className="border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-white/70">
+                          {event.category || "Uncategorised"}
+                        </span>
 
-                    <Link
-                      href={`/edit-event/${event.id}`}
-                      className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
-                    >
-                      Edit Event / Tickets
-                    </Link>
+                        <span
+                          className={`border px-3 py-1 text-[11px] uppercase tracking-[0.12em] ${status.className}`}
+                        >
+                          {status.label}
+                        </span>
 
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteEvent(event.id)}
-                      disabled={deletingId === event.id}
-                      className="border border-red-500/50 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-red-300 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {deletingId === event.id ? "Deleting..." : "Delete"}
-                    </button>
+                        {stats.freeTickets > 0 ? (
+                          <span className="border border-violet-400/40 bg-violet-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-violet-200">
+                            {formatNumber(stats.freeTickets)} Free
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <h3 className="text-[28px] font-extrabold leading-tight tracking-[-0.03em]">
+                        {event.title}
+                      </h3>
+
+                      <p className="mt-2 text-[14px] text-white/70">
+                        {event.location || "Location coming soon"}
+                      </p>
+
+                      <p className="mt-1 text-[13px] text-white/50">
+                        {formatDate(event.event_date)}
+                      </p>
+
+                      {event.description ? (
+                        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-white/65">
+                          {event.description}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex justify-between text-[12px] text-white/50">
+                        <span>Sell-through</span>
+                        <span>{formatPercent(sellThrough)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden bg-white/10">
+                        <div
+                          className="h-full bg-white"
+                          style={{ width: `${Math.min(sellThrough, 100)}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex justify-between text-[11px] text-white/45">
+                        <span>{formatPercent(eventFreeShare)} free ticket share</span>
+                        <span>{formatNumber(stats.ticketsLeft)} left</span>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-6">
+                      <StatCard label="Total" value={stats.ticketsSold} />
+                      <StatCard label="Paid" value={stats.paidTickets} />
+                      <StatCard label="Free" value={stats.freeTickets} />
+                      <StatCard label="Left" value={stats.ticketsLeft} />
+                      <StatCard label="Capacity" value={stats.totalCapacity} />
+                      <StatCard label="Revenue" value={formatMoney(stats.grossRevenue)} />
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <Link
+                        href={`/events/${event.id}`}
+                        className="border border-white/25 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
+                      >
+                        View Event
+                      </Link>
+
+                      <Link
+                        href={`/edit-event/${event.id}`}
+                        className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
+                      >
+                        Edit Event / Tickets
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEvent(event.id)}
+                        disabled={deletingId === event.id}
+                        className="border border-red-500/50 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-red-300 transition hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {deletingId === event.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -871,6 +933,9 @@ export default function DashboardPage() {
               <h2 className="text-[30px] font-extrabold tracking-[-0.03em]">
                 Payout Details
               </h2>
+              <p className="mt-3 max-w-2xl text-[14px] leading-7 text-white/70">
+                Add the account details Swift Tickets should use for your event payouts.
+              </p>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 {[
@@ -940,6 +1005,10 @@ export default function DashboardPage() {
                   }
                 />
               </div>
+
+              <p className="mt-6 text-[13px] leading-7 text-white/65">
+                Your payout profile is linked to your organiser account and can be updated anytime.
+              </p>
             </div>
           </div>
         )}
