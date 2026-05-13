@@ -231,48 +231,77 @@ export default function HomePage() {
   }, [typingComplete, isSuggestionVisible, isUserTyping]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+  const video = videoRef.current;
 
-    video.muted = true;
-    video.defaultMuted = true;
-    video.playsInline = true;
-    video.setAttribute("muted", "");
-    video.setAttribute("playsinline", "");
-    video.setAttribute("autoplay", "");
+  if (!video) return;
 
-    const tryPlay = async () => {
-      try {
-        await video.play();
-      } catch {}
-    };
+  video.muted = true;
+  video.defaultMuted = true;
+  video.loop = true;
+  video.autoplay = true;
+  video.playsInline = true;
 
-    const handleCanPlay = () => {
-      tryPlay();
-    };
+  video.setAttribute("muted", "");
+  video.setAttribute("autoplay", "");
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "true");
 
-    const handleLoadedData = () => {
-      setVideoLoaded(true);
-      tryPlay();
-    };
+  const forcePlay = async () => {
+    try {
+      await video.play();
+    } catch (err) {
+      console.log("Autoplay blocked", err);
+    }
+  };
 
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        tryPlay();
-      }
-    };
+  const handleLoaded = async () => {
+    setVideoLoaded(true);
 
-    tryPlay();
-    video.addEventListener("canplay", handleCanPlay);
-    video.addEventListener("loadeddata", handleLoadedData);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    try {
+      video.currentTime = 0.1;
+    } catch {}
 
-    return () => {
-      video.removeEventListener("canplay", handleCanPlay);
-      video.removeEventListener("loadeddata", handleLoadedData);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
+    forcePlay();
+  };
+
+  const handleVisibility = () => {
+    if (!document.hidden) {
+      forcePlay();
+    }
+  };
+
+  const handleTouch = () => {
+    forcePlay();
+  };
+
+  forcePlay();
+
+  video.addEventListener("loadeddata", handleLoaded);
+  video.addEventListener("canplay", forcePlay);
+  video.addEventListener("playing", () => {
+    setVideoLoaded(true);
+  });
+
+  document.addEventListener("visibilitychange", handleVisibility);
+
+  window.addEventListener("touchstart", handleTouch, {
+    passive: true,
+    once: true,
+  });
+
+  window.addEventListener("scroll", handleTouch, {
+    passive: true,
+    once: true,
+  });
+
+  return () => {
+    video.removeEventListener("loadeddata", handleLoaded);
+    video.removeEventListener("canplay", forcePlay);
+    document.removeEventListener("visibilitychange", handleVisibility);
+    window.removeEventListener("touchstart", handleTouch);
+    window.removeEventListener("scroll", handleTouch);
+  };
+}, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -696,7 +725,7 @@ export default function HomePage() {
             aria-hidden="true"
             tabIndex={-1}
             poster="/hero-fallback.jpg"
-            className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover scale-105 brightness-95 contrast-115 saturate-150 hue-rotate-[320deg] transition-opacity duration-700 ${
+            className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover scale-105 will-change-transform
               videoLoaded ? "opacity-100" : "opacity-0"
             }`}
           >
