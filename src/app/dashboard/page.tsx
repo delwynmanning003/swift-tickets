@@ -80,6 +80,23 @@ type PayoutForm = {
   verification_status: string;
 };
 
+const SOUTH_AFRICAN_BANKS: Record<string, string> = {
+  ABSA: "632005",
+  Capitec: "470010",
+  FNB: "250655",
+  Nedbank: "198765",
+  "Standard Bank": "051001",
+  TymeBank: "678910",
+  "African Bank": "430000",
+  "Bidvest Bank": "462005",
+  "Discovery Bank": "679000",
+  Investec: "580105",
+  "Old Mutual Money Account": "467010",
+  Postbank: "460005",
+  Sasfin: "683000",
+  Ubank: "431010",
+};
+
 const emptyStats: EventAnalytics = {
   totalCapacity: 0,
   ticketsSold: 0,
@@ -188,12 +205,21 @@ function SimpleBarChart({
   type: "tickets" | "revenue";
 }) {
   const recent = data.slice(-10);
+
   const maxValue = Math.max(
     1,
     ...recent.map((item) =>
       type === "revenue" ? item.revenue : item.totalTickets
     )
   );
+
+  const yAxisSteps = [
+    maxValue,
+    maxValue * 0.75,
+    maxValue * 0.5,
+    maxValue * 0.25,
+    0,
+  ];
 
   if (recent.length === 0) {
     return (
@@ -205,33 +231,63 @@ function SimpleBarChart({
 
   return (
     <div className="border border-white/10 bg-black/30 p-4">
-      <div className="flex h-40 items-end gap-2">
-        {recent.map((item) => {
-          const value = type === "revenue" ? item.revenue : item.totalTickets;
-          const height = Math.max(6, (value / maxValue) * 100);
+      <div className="grid grid-cols-[58px_1fr] gap-3">
+        <div className="flex h-44 flex-col justify-between text-right text-[10px] text-white/45">
+          {yAxisSteps.map((step, index) => (
+            <span key={index}>
+              {type === "revenue"
+                ? formatMoney(step)
+                : formatNumber(Math.round(step))}
+            </span>
+          ))}
+        </div>
 
-          return (
-            <div
-              key={`${item.date}-${type}`}
-              className="flex flex-1 flex-col items-center gap-2"
-            >
-              <div className="flex h-28 w-full items-end">
+        <div>
+          <div className="relative flex h-44 items-end gap-2 border-l border-b border-white/20 pl-3">
+            <div className="absolute inset-x-0 top-0 border-t border-white/10" />
+            <div className="absolute inset-x-0 top-1/4 border-t border-white/10" />
+            <div className="absolute inset-x-0 top-1/2 border-t border-white/10" />
+            <div className="absolute inset-x-0 top-3/4 border-t border-white/10" />
+
+            {recent.map((item) => {
+              const value = type === "revenue" ? item.revenue : item.totalTickets;
+              const height = Math.max(5, (value / maxValue) * 100);
+
+              return (
                 <div
-                  className="w-full bg-white"
-                  style={{ height: `${height}%` }}
-                  title={
-                    type === "revenue"
-                      ? `${formatMoney(item.revenue)} on ${item.date}`
-                      : `${item.totalTickets} tickets on ${item.date}`
-                  }
-                />
-              </div>
-              <span className="text-[10px] text-white/40">
+                  key={`${item.date}-${type}`}
+                  className="relative z-10 flex flex-1 flex-col items-center justify-end gap-2"
+                >
+                  <span className="text-[10px] text-white/60">
+                    {type === "revenue"
+                      ? value > 0
+                        ? formatMoney(value)
+                        : "R0"
+                      : formatNumber(value)}
+                  </span>
+
+                  <div
+                    className="w-full bg-white"
+                    style={{ height: `${height}%` }}
+                    title={
+                      type === "revenue"
+                        ? `${formatMoney(value)} on ${item.date}`
+                        : `${formatNumber(value)} tickets on ${item.date}`
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 ml-3 flex gap-2 text-[10px] text-white/45">
+            {recent.map((item) => (
+              <span key={`${item.date}-label`} className="flex-1 text-center">
                 {formatShortDate(item.date)}
               </span>
-            </div>
-          );
-        })}
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -593,11 +649,7 @@ export default function DashboardPage() {
 
         if (isUpcoming) acc.upcoming += 1;
 
-        if (
-          eventStats &&
-          eventStats.totalCapacity > 0 &&
-          eventStats.ticketsLeft <= 0
-        ) {
+        if (eventStats?.totalCapacity > 0 && eventStats.ticketsLeft <= 0) {
           acc.soldOutEvents += 1;
         }
 
@@ -685,27 +737,19 @@ export default function DashboardPage() {
       };
     });
 
-    const highestRevenue = [...withStats].sort(
-      (a, b) => b.stats.grossRevenue - a.stats.grossRevenue
-    )[0];
-
-    const bestSelling = [...withStats].sort(
-      (a, b) => b.stats.ticketsSold - a.stats.ticketsSold
-    )[0];
-
-    const mostFreeTickets = [...withStats].sort(
-      (a, b) => b.stats.freeTickets - a.stats.freeTickets
-    )[0];
-
-    const highestCheckIn = [...withStats].sort(
-      (a, b) => b.stats.checkInRate - a.stats.checkInRate
-    )[0];
-
     return {
-      highestRevenue,
-      bestSelling,
-      mostFreeTickets,
-      highestCheckIn,
+      highestRevenue: [...withStats].sort(
+        (a, b) => b.stats.grossRevenue - a.stats.grossRevenue
+      )[0],
+      bestSelling: [...withStats].sort(
+        (a, b) => b.stats.ticketsSold - a.stats.ticketsSold
+      )[0],
+      mostFreeTickets: [...withStats].sort(
+        (a, b) => b.stats.freeTickets - a.stats.freeTickets
+      )[0],
+      highestCheckIn: [...withStats].sort(
+        (a, b) => b.stats.checkInRate - a.stats.checkInRate
+      )[0],
       rankedEvents: withStats.sort(
         (a, b) => b.stats.grossRevenue - a.stats.grossRevenue
       ),
@@ -771,6 +815,14 @@ export default function DashboardPage() {
     setPayoutForm((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  };
+
+  const handleBankChange = (bankName: string) => {
+    setPayoutForm((prev) => ({
+      ...prev,
+      bank_name: bankName,
+      branch_code: SOUTH_AFRICAN_BANKS[bankName] || "",
     }));
   };
 
@@ -1047,7 +1099,7 @@ export default function DashboardPage() {
                   My Events
                 </h2>
                 <p className="mt-2 text-sm text-white/55">
-                  Tap an event to open its detailed insights.
+                  View, edit, and open detailed event insights.
                 </p>
               </div>
 
@@ -1072,10 +1124,7 @@ export default function DashboardPage() {
                     : 0;
 
                 return (
-                  <div
-                    key={event.id}
-                    className="border border-white/15 bg-white/[0.03]"
-                  >
+                  <div key={event.id} className="border border-white/15 bg-white/[0.03]">
                     <div className="grid gap-4 p-4 md:grid-cols-[120px_1fr_auto] md:items-center">
                       <div className="relative aspect-[1.2] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)] md:aspect-square">
                         {event.image_url ? (
@@ -1095,9 +1144,7 @@ export default function DashboardPage() {
                           <span className="border border-white/20 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white/70">
                             {event.category || "Uncategorised"}
                           </span>
-                          <span
-                            className={`border px-3 py-1 text-[10px] uppercase tracking-[0.12em] ${status.className}`}
-                          >
+                          <span className={`border px-3 py-1 text-[10px] uppercase tracking-[0.12em] ${status.className}`}>
                             {status.label}
                           </span>
                         </div>
@@ -1132,13 +1179,18 @@ export default function DashboardPage() {
                       <div className="flex flex-wrap gap-3 md:flex-col">
                         <button
                           type="button"
-                          onClick={() =>
-                            setExpandedEventId(isExpanded ? null : event.id)
-                          }
+                          onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
                           className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
                         >
                           {isExpanded ? "Close Insights" : "View Insights"}
                         </button>
+
+                        <Link
+                          href={`/edit-event/${event.id}`}
+                          className="border border-white/25 px-5 py-3 text-center text-[12px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
+                        >
+                          Edit Event
+                        </Link>
 
                         <Link
                           href={`/events/${event.id}`}
@@ -1206,13 +1258,6 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="mt-6 flex flex-wrap gap-3">
-                          <Link
-                            href={`/edit-event/${event.id}`}
-                            className="bg-white px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
-                          >
-                            Edit Event / Tickets
-                          </Link>
-
                           <button
                             type="button"
                             onClick={() => handleDeleteEvent(event.id)}
@@ -1239,27 +1284,71 @@ export default function DashboardPage() {
               </h2>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                {[
-                  ["account_holder_name", "Account Holder Name", "Account holder name"],
-                  ["business_name", "Business Name", "Business name"],
-                  ["bank_name", "Bank Name", "Bank name"],
-                  ["account_number", "Account Number", "Account number"],
-                  ["branch_code", "Branch Code", "Branch code"],
-                ].map(([field, label, placeholder]) => (
-                  <div key={field}>
-                    <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
-                      {label}
-                    </label>
-                    <input
-                      value={payoutForm[field as keyof PayoutForm]}
-                      onChange={(e) =>
-                        handlePayoutChange(field as keyof PayoutForm, e.target.value)
-                      }
-                      className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
-                      placeholder={placeholder}
-                    />
-                  </div>
-                ))}
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Account Holder Name
+                  </label>
+                  <input
+                    value={payoutForm.account_holder_name}
+                    onChange={(e) => handlePayoutChange("account_holder_name", e.target.value)}
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="Account holder name"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Business Name
+                  </label>
+                  <input
+                    value={payoutForm.business_name}
+                    onChange={(e) => handlePayoutChange("business_name", e.target.value)}
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="Business name"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Bank Name
+                  </label>
+                  <select
+                    value={payoutForm.bank_name}
+                    onChange={(e) => handleBankChange(e.target.value)}
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                  >
+                    <option value="">Select bank</option>
+                    {Object.keys(SOUTH_AFRICAN_BANKS).map((bank) => (
+                      <option key={bank} value={bank}>
+                        {bank}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Account Number
+                  </label>
+                  <input
+                    value={payoutForm.account_number}
+                    onChange={(e) => handlePayoutChange("account_number", e.target.value)}
+                    className="w-full border border-white/15 bg-black px-4 py-3 text-white outline-none focus:border-white/40"
+                    placeholder="Account number"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
+                    Branch Code
+                  </label>
+                  <input
+                    value={payoutForm.branch_code}
+                    readOnly
+                    className="w-full border border-white/15 bg-white/5 px-4 py-3 text-white/70 outline-none"
+                    placeholder="Universal branch code"
+                  />
+                </div>
 
                 <div>
                   <label className="mb-2 block text-[12px] font-bold uppercase tracking-[0.1em] text-white/60">
@@ -1277,6 +1366,15 @@ export default function DashboardPage() {
                     <option value="Business">Business</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="mt-4 border border-yellow-500/20 bg-yellow-500/5 p-4">
+                <p className="text-[12px] leading-5 text-yellow-100/80">
+                  Payouts are automatically issued 48 hours after the event has
+                  ended. Please ensure your banking details are correct before
+                  saving. Swift Tickets is not responsible for payouts sent to
+                  incorrect banking information entered by the organiser.
+                </p>
               </div>
 
               <button

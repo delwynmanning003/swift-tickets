@@ -8,6 +8,13 @@ import { supabase } from "@/lib/supabase";
 
 type ActiveTab = "lineup" | "tickets" | "about" | "venue";
 
+type TicketAvailability = {
+  status: "available" | "coming_soon" | "sales_ended" | "sold_out";
+  label: string;
+  helper: string;
+  canBuy: boolean;
+};
+
 function getBuyerTicketPrice(basePrice: number, feeOption?: string | null) {
   if (basePrice <= 0) return 0;
 
@@ -24,6 +31,20 @@ function getBuyerTicketPrice(basePrice: number, feeOption?: string | null) {
 
 function formatMoney(amount: number) {
   return `R${amount.toFixed(2)}`;
+}
+
+function formatShortDateTime(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleString("en-ZA", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatEventDateRange(eventDate?: string | null, endDate?: string | null) {
@@ -90,17 +111,11 @@ function getCityLine(address?: string | null) {
 
 function getTicketRemainingQty(ticket: any) {
   const totalQty = Number(
-    ticket.quantity ??
-      ticket.total_quantity ??
-      ticket.max_quantity ??
-      0
+    ticket.quantity ?? ticket.total_quantity ?? ticket.max_quantity ?? 0
   );
 
   const soldQty = Number(
-    ticket.sold_count ??
-      ticket.quantity_sold ??
-      ticket.sold ??
-      0
+    ticket.sold_count ?? ticket.quantity_sold ?? ticket.sold ?? 0
   );
 
   if (
@@ -125,6 +140,53 @@ function isTicketSoldOut(ticket: any) {
     ticket?.sold_out === true ||
     remainingQty === 0
   );
+}
+
+function getTicketAvailability(ticket: any): TicketAvailability {
+  const now = new Date();
+  const soldOut = isTicketSoldOut(ticket);
+
+  if (soldOut) {
+    return {
+      status: "sold_out",
+      label: "Sold Out",
+      helper: "This ticket type is no longer available.",
+      canBuy: false,
+    };
+  }
+
+  if (ticket.sales_start_at) {
+    const startDate = new Date(ticket.sales_start_at);
+
+    if (!Number.isNaN(startDate.getTime()) && startDate > now) {
+      return {
+        status: "coming_soon",
+        label: "Coming Soon",
+        helper: `Sales start ${formatShortDateTime(ticket.sales_start_at)}.`,
+        canBuy: false,
+      };
+    }
+  }
+
+  if (ticket.sales_end_at) {
+    const endDate = new Date(ticket.sales_end_at);
+
+    if (!Number.isNaN(endDate.getTime()) && endDate < now) {
+      return {
+        status: "sales_ended",
+        label: "Sales Ended",
+        helper: `Sales ended ${formatShortDateTime(ticket.sales_end_at)}.`,
+        canBuy: false,
+      };
+    }
+  }
+
+  return {
+    status: "available",
+    label: "Available",
+    helper: ticket.description || "General event access.",
+    canBuy: true,
+  };
 }
 
 export default function EventPage() {
@@ -155,16 +217,38 @@ export default function EventPage() {
     const loadEventPage = async () => {
       setLoading(true);
 
-      const { data: eventRow } = await supabase
+      const { data: eventById } = await supabase
         .from("events")
         .select("*")
         .eq("id", id)
-        .single();
+        .maybeSingle();
+
+      let eventRow = eventById;
+
+      if (!eventRow) {
+        const { data: eventBySlug } = await supabase
+          .from("events")
+          .select("*")
+          .eq("slug", id)
+          .maybeSingle();
+
+        eventRow = eventBySlug;
+      }
+
+      if (!eventRow) {
+        setEvent(null);
+        setTicketTypes([]);
+        setResaleTickets([]);
+        setLoading(false);
+        return;
+      }
+
+      const eventId = eventRow.id;
 
       const { data: ticketRows } = await supabase
         .from("ticket_types")
         .select("*")
-        .eq("event_id", id)
+        .eq("event_id", eventId)
         .order("price", { ascending: true });
 
       const { data: resaleRows } = await supabase
@@ -188,7 +272,7 @@ export default function EventPage() {
             .eq("id", ticket.ticket_type_id)
             .single();
 
-          if (!ticketType || ticketType.event_id !== id) return null;
+          if (!ticketType || ticketType.event_id !== eventId) return null;
 
           return {
             resale,
@@ -224,7 +308,7 @@ export default function EventPage() {
   }, [lineupItems, activeTab]);
 
   const availableTicketTypes = useMemo(() => {
-    return ticketTypes.filter((ticket) => !isTicketSoldOut(ticket));
+    return ticketTypes.filter((ticket) => getTicketAvailability(ticket).canBuy);
   }, [ticketTypes]);
 
   const lowestPrice = useMemo(() => {
@@ -243,11 +327,31 @@ export default function EventPage() {
   }, [availableTicketTypes, resaleTickets, event]);
 
   const allPrimaryTicketsSoldOut = useMemo(() => {
-    return ticketTypes.length > 0 && availableTicketTypes.length === 0;
-  }, [ticketTypes, availableTicketTypes]);
+    return (
+      ticketTypes.length > 0 &&
+      ticketTypes.every(
+        (ticket) => getTicketAvailability(ticket).status === "sold_out"
+      )
+    );
+  }, [ticketTypes]);
+
+  const hasUpcomingTickets = useMemo(() => {
+    return ticketTypes.some(
+      (ticket) => getTicketAvailability(ticket).status === "coming_soon"
+    );
+  }, [ticketTypes]);
+
+  const hasSalesEndedTickets = useMemo(() => {
+    return ticketTypes.some(
+      (ticket) => getTicketAvailability(ticket).status === "sales_ended"
+    );
+  }, [ticketTypes]);
 
   const eventDateText = useMemo(() => {
-    return formatEventDateRange(event?.event_date, event?.end_date || event?.event_end_date);
+    return formatEventDateRange(
+      event?.event_date,
+      event?.end_date || event?.event_end_date
+    );
   }, [event]);
 
   const formattedDate = useMemo(() => {
@@ -268,8 +372,7 @@ export default function EventPage() {
     });
   }, [event]);
 
-  const primaryVenueName =
-    event?.venue_name || event?.location || "Venue TBA";
+  const primaryVenueName = event?.venue_name || event?.location || "Venue TBA";
   const primaryVenueAddress =
     event?.venue_address || event?.location || "Address TBA";
 
@@ -312,20 +415,21 @@ export default function EventPage() {
       event?.fee_option
     );
 
-    const soldOut = isTicketSoldOut(ticket);
-
-    if (mobile) {
+    const availability = getTicketAvailability(ticket);
+    const inactive = !availability.canBuy;    if (mobile) {
       const card = (
         <div
           style={{
-            border: "1px solid rgba(255,255,255,0.22)",
+            border: inactive
+              ? "1px solid rgba(255,255,255,0.22)"
+              : "1px solid rgba(255,255,255,0.75)",
             padding: "18px 16px",
             background: "#000",
             minHeight: 132,
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            opacity: soldOut ? 0.55 : 1,
+            opacity: inactive ? 0.55 : 1,
           }}
         >
           <div
@@ -343,24 +447,26 @@ export default function EventPage() {
                   fontWeight: 800,
                   lineHeight: 1.2,
                   marginBottom: 14,
-                  color: soldOut ? "rgba(255,255,255,0.55)" : "#fff",
+                  color: inactive ? "rgba(255,255,255,0.55)" : "#fff",
                   textTransform: "uppercase",
                 }}
               >
                 {ticket.name}
               </div>
 
-              {!soldOut && ticket.description ? (
+              {availability.helper ? (
                 <div
                   style={{
                     fontSize: 12,
                     lineHeight: 1.5,
-                    color: "rgba(255,255,255,0.88)",
+                    color: inactive
+                      ? "rgba(255,255,255,0.55)"
+                      : "rgba(255,255,255,0.88)",
                     marginBottom: 16,
                     textTransform: "uppercase",
                   }}
                 >
-                  {ticket.description}
+                  {availability.helper}
                 </div>
               ) : null}
 
@@ -368,21 +474,27 @@ export default function EventPage() {
                 style={{
                   fontSize: 16,
                   fontWeight: 800,
-                  color: soldOut ? "rgba(255,255,255,0.55)" : "#fff",
-                  marginBottom: soldOut ? 12 : 0,
+                  color: inactive ? "rgba(255,255,255,0.55)" : "#fff",
+                  marginBottom: inactive ? 12 : 0,
                 }}
               >
                 {buyerPrice === 0 ? "FREE" : formatMoney(buyerPrice)}
               </div>
 
-              {soldOut ? (
+              {inactive ? (
                 <div
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    border: "1px solid #ff4d57",
-                    color: "#ff4d57",
+                    border:
+                      availability.status === "coming_soon"
+                        ? "1px solid #60a5fa"
+                        : "1px solid #ff4d57",
+                    color:
+                      availability.status === "coming_soon"
+                        ? "#93c5fd"
+                        : "#ff4d57",
                     fontSize: 11,
                     fontWeight: 700,
                     padding: "6px 10px",
@@ -390,12 +502,12 @@ export default function EventPage() {
                     textTransform: "uppercase",
                   }}
                 >
-                  Sold Out
+                  {availability.label}
                 </div>
               ) : null}
             </div>
 
-            {!soldOut ? (
+            {!inactive ? (
               <div
                 style={{
                   whiteSpace: "nowrap",
@@ -412,7 +524,7 @@ export default function EventPage() {
         </div>
       );
 
-      if (soldOut) {
+      if (inactive) {
         return <div key={ticket.id}>{card}</div>;
       }
 
@@ -427,15 +539,10 @@ export default function EventPage() {
       );
     }
 
-    const desktopBuyerPrice = getBuyerTicketPrice(
-      Number(ticket.price || 0),
-      event?.fee_option
-    );
-
     const desktopCard = (
       <div
         style={{
-          border: soldOut
+          border: inactive
             ? "1px solid rgba(255,255,255,0.28)"
             : "1px solid rgba(255,255,255,0.75)",
           padding: "22px 24px",
@@ -443,7 +550,7 @@ export default function EventPage() {
           justifyContent: "space-between",
           alignItems: "center",
           gap: 20,
-          opacity: soldOut ? 0.55 : 1,
+          opacity: inactive ? 0.55 : 1,
           background: "#000",
         }}
       >
@@ -453,13 +560,13 @@ export default function EventPage() {
               margin: "0 0 8px",
               fontSize: 18,
               fontWeight: 700,
-              color: soldOut ? "rgba(255,255,255,0.6)" : "#fff",
+              color: inactive ? "rgba(255,255,255,0.6)" : "#fff",
             }}
           >
             {ticket.name}
           </h3>
 
-          {!soldOut ? (
+          {!inactive ? (
             <>
               <p
                 style={{
@@ -469,7 +576,7 @@ export default function EventPage() {
                   lineHeight: 1.5,
                 }}
               >
-                {ticket.description || "General event access."}
+                {availability.helper}
               </p>
               <p
                 style={{
@@ -481,27 +588,46 @@ export default function EventPage() {
                   letterSpacing: 0.8,
                 }}
               >
-                {desktopBuyerPrice === 0 ? "No extra fees" : "Includes all fees"}
+                {buyerPrice === 0 ? "No extra fees" : "Includes all fees"}
               </p>
             </>
           ) : (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                border: "1px solid #ff4d57",
-                color: "#ff4d57",
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "6px 10px",
-                letterSpacing: 0.4,
-                textTransform: "uppercase",
-                marginTop: 6,
-              }}
-            >
-              Sold Out
-            </div>
+            <>
+              <p
+                style={{
+                  margin: "0 0 8px",
+                  color: "rgba(255,255,255,0.55)",
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                }}
+              >
+                {availability.helper}
+              </p>
+
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border:
+                    availability.status === "coming_soon"
+                      ? "1px solid #60a5fa"
+                      : "1px solid #ff4d57",
+                  color:
+                    availability.status === "coming_soon"
+                      ? "#93c5fd"
+                      : "#ff4d57",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "6px 10px",
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                  marginTop: 6,
+                }}
+              >
+                {availability.label}
+              </div>
+            </>
           )}
         </div>
 
@@ -510,21 +636,21 @@ export default function EventPage() {
             whiteSpace: "nowrap",
             fontSize: 16,
             fontWeight: 700,
-            color: soldOut ? "rgba(255,255,255,0.6)" : "#fff",
+            color: inactive ? "rgba(255,255,255,0.6)" : "#fff",
           }}
         >
-          {desktopBuyerPrice === 0
-            ? soldOut
+          {buyerPrice === 0
+            ? inactive
               ? "FREE"
               : "FREE →"
-            : soldOut
-            ? formatMoney(desktopBuyerPrice)
-            : `${formatMoney(desktopBuyerPrice)} →`}
+            : inactive
+            ? formatMoney(buyerPrice)
+            : `${formatMoney(buyerPrice)} →`}
         </div>
       </div>
     );
 
-    if (soldOut) {
+    if (inactive) {
       return <div key={ticket.id}>{desktopCard}</div>;
     }
 
@@ -650,7 +776,7 @@ export default function EventPage() {
               }}
             >
               <Link
-                href="/"
+                href="/explore"
                 style={{
                   color: "white",
                   textDecoration: "none",
@@ -921,6 +1047,42 @@ export default function EventPage() {
                   >
                     Sold Out
                   </span>
+                ) : hasUpcomingTickets ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: 28,
+                      padding: "0 12px",
+                      border: "1px solid #60a5fa",
+                      color: "#93c5fd",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 0.6,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Coming Soon
+                  </span>
+                ) : hasSalesEndedTickets ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: 28,
+                      padding: "0 12px",
+                      border: "1px solid #ff4d57",
+                      color: "#ff4d57",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 0.6,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Sales Ended
+                  </span>
                 ) : null}
               </div>
 
@@ -951,167 +1113,85 @@ export default function EventPage() {
               </div>
 
               <div
+                id="event-tabs"
                 style={{
-                  marginTop: 20,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 18,
-                  flexWrap: "wrap",
+                  marginTop: 22,
+                  padding: "0",
+                  borderBottom: "1px solid rgba(255,255,255,0.14)",
+                  overflowX: "auto",
                 }}
               >
-                <a
-                  href="#"
+                <div
                   style={{
-                    color: "#8b5cf6",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    textDecoration: "underline",
-                    textUnderlineOffset: 2,
+                    display: "flex",
+                    gap: 28,
+                    minWidth: "max-content",
                   }}
                 >
-                  GOT A CODE?
-                </a>
+                  {lineupItems.length > 0 ? (
+                    <button
+                      onClick={() => setActiveTab("lineup")}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color:
+                          activeTab === "lineup"
+                            ? "#fff"
+                            : "rgba(255,255,255,0.78)",
+                        fontSize: 14,
+                        fontWeight: 700,
+                        padding: "0 0 14px",
+                        cursor: "pointer",
+                        borderBottom:
+                          activeTab === "lineup"
+                            ? "2px solid #fff"
+                            : "2px solid transparent",
+                      }}
+                    >
+                      LINE UP
+                    </button>
+                  ) : null}
 
-                {shareMessage ? (
-                  <span
-                    style={{
-                      color: "#cfcfcf",
-                      fontSize: 12,
-                    }}
-                  >
-                    {shareMessage}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <div
-              id="event-tabs"
-              style={{
-                marginTop: 22,
-                padding: "0 16px",
-                borderBottom: "1px solid rgba(255,255,255,0.14)",
-                overflowX: "auto",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  gap: 28,
-                  minWidth: "max-content",
-                }}
-              >
-                {lineupItems.length > 0 ? (
-                  <button
-                    onClick={() => setActiveTab("lineup")}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: activeTab === "lineup" ? "#fff" : "rgba(255,255,255,0.78)",
-                      fontSize: 14,
-                      fontWeight: 700,
-                      padding: "0 0 14px",
-                      cursor: "pointer",
-                      borderBottom:
-                        activeTab === "lineup"
-                          ? "2px solid #fff"
-                          : "2px solid transparent",
-                    }}
-                  >
-                    LINE UP
-                  </button>
-                ) : null}
-
-                <button
-                  onClick={() => setActiveTab("tickets")}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: activeTab === "tickets" ? "#fff" : "rgba(255,255,255,0.78)",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    padding: "0 0 14px",
-                    cursor: "pointer",
-                    borderBottom:
-                      activeTab === "tickets"
-                        ? "2px solid #fff"
-                        : "2px solid transparent",
-                  }}
-                >
-                  TICKETS
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("about")}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: activeTab === "about" ? "#fff" : "rgba(255,255,255,0.78)",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    padding: "0 0 14px",
-                    cursor: "pointer",
-                    borderBottom:
-                      activeTab === "about"
-                        ? "2px solid #fff"
-                        : "2px solid transparent",
-                  }}
-                >
-                  ABOUT
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("venue")}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: activeTab === "venue" ? "#fff" : "rgba(255,255,255,0.78)",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    padding: "0 0 14px",
-                    cursor: "pointer",
-                    borderBottom:
-                      activeTab === "venue"
-                        ? "2px solid #fff"
-                        : "2px solid transparent",
-                  }}
-                >
-                  VENUE
-                </button>
+                  {(["tickets", "about", "venue"] as ActiveTab[]).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color:
+                          activeTab === tab
+                            ? "#fff"
+                            : "rgba(255,255,255,0.78)",
+                        fontSize: 14,
+                        fontWeight: 700,
+                        padding: "0 0 14px",
+                        cursor: "pointer",
+                        borderBottom:
+                          activeTab === tab
+                            ? "2px solid #fff"
+                            : "2px solid transparent",
+                      }}
+                    >
+                      {tab.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
             <div style={{ padding: "18px 16px 36px" }}>
-              {activeTab === "lineup" && lineupItems.length > 0 ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  {lineupItems.map((artist, index) => (
-                    <div
-                      key={`${artist}-${index}`}
-                      style={{
-                        fontSize: 17,
-                        lineHeight: 1.3,
-                        fontWeight: 600,
-                        color: "#fff",
-                      }}
-                    >
-                      {artist}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
               {activeTab === "tickets" ? (
                 <div style={{ display: "grid", gap: 14 }}>
-                  {ticketTypes.map((ticket: any) => renderTicketCard(ticket, true))}
+                  {ticketTypes.map((ticket: any) =>
+                    renderTicketCard(ticket, true)
+                  )}
 
                   {resaleTickets.map((item: any) => (
                     <Link
                       key={item.resale.id}
                       href={`/resale/${item.resale.id}`}
-                      style={{
-                        textDecoration: "none",
-                        color: "#fff",
-                      }}
+                      style={{ textDecoration: "none", color: "#fff" }}
                     >
                       <div
                         style={{
@@ -1120,81 +1200,24 @@ export default function EventPage() {
                           background: "rgba(249,115,22,0.06)",
                         }}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            gap: 16,
-                          }}
-                        >
-                          <div style={{ flex: 1 }}>
-                            <div
-                              style={{
-                                fontSize: 17,
-                                fontWeight: 700,
-                                lineHeight: 1.2,
-                                marginBottom: 6,
-                              }}
-                            >
-                              {item.ticketType?.name} · Resale
-                            </div>
-
-                            <div
-                              style={{
-                                fontSize: 12,
-                                lineHeight: 1.55,
-                                color: "rgba(255,255,255,0.78)",
-                                marginBottom: 8,
-                              }}
-                            >
-                              Verified fan-to-fan resale ticket bought through Swift Tickets.
-                            </div>
-
-                            <div
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 700,
-                                letterSpacing: 0.8,
-                                textTransform: "uppercase",
-                                color: "#fdba74",
-                              }}
-                            >
-                              Resale listing
-                            </div>
-                          </div>
-
-                          <div
-                            style={{
-                              whiteSpace: "nowrap",
-                              fontSize: 15,
-                              fontWeight: 700,
-                              color: "#fdba74",
-                              paddingTop: 2,
-                            }}
-                          >
-                            {formatMoney(Number(item.resale.resale_price || 0))} →
-                          </div>
-                        </div>
+                        <strong>{item.ticketType?.name} · Resale</strong>
+                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>
+                          Verified fan-to-fan resale ticket bought through Swift Tickets.
+                        </p>
+                        <strong style={{ color: "#fdba74" }}>
+                          {formatMoney(Number(item.resale.resale_price || 0))} →
+                        </strong>
                       </div>
                     </Link>
                   ))}
 
                   {ticketTypes.length === 0 && resaleTickets.length === 0 ? (
-                    <div
-                      style={{
-                        color: "rgba(255,255,255,0.7)",
-                        fontSize: 14,
-                        lineHeight: 1.6,
-                      }}
-                    >
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 14 }}>
                       No tickets available yet.
                     </div>
                   ) : null}
                 </div>
-              ) : null}
-
-              {activeTab === "about" ? (
+              ) : activeTab === "about" ? (
                 <div
                   style={{
                     color: "#fff",
@@ -1205,21 +1228,11 @@ export default function EventPage() {
                 >
                   {event.description || "More event details coming soon."}
                 </div>
-              ) : null}
-
-              {activeTab === "venue" ? (
+              ) : activeTab === "venue" ? (
                 <div>
-                  <div
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 700,
-                      lineHeight: 1.25,
-                      marginBottom: 8,
-                    }}
-                  >
+                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
                     {primaryVenueName}
                   </div>
-
                   <div
                     style={{
                       fontSize: 14,
@@ -1230,6 +1243,14 @@ export default function EventPage() {
                   >
                     {primaryVenueAddress}
                   </div>
+                </div>
+              ) : lineupItems.length > 0 ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {lineupItems.map((artist, index) => (
+                    <div key={`${artist}-${index}`} style={{ fontSize: 17 }}>
+                      {artist}
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -1268,6 +1289,10 @@ export default function EventPage() {
                       }`
                     : allPrimaryTicketsSoldOut
                     ? "SOLD OUT"
+                    : hasUpcomingTickets
+                    ? "COMING SOON"
+                    : hasSalesEndedTickets
+                    ? "SALES ENDED"
                     : "TICKETS"}
                 </button>
               </div>
@@ -1302,170 +1327,36 @@ export default function EventPage() {
                     fill
                     style={{ objectFit: "cover" }}
                   />
-                ) : (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "flex",
-                      alignItems: "end",
-                      justifyContent: "start",
-                      padding: 22,
-                      background:
-                        "linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.1))",
-                    }}
-                  >
-                    <div>
-                      <p
-                        style={{
-                          margin: "0 0 8px",
-                          fontSize: 11,
-                          letterSpacing: 1.5,
-                          textTransform: "uppercase",
-                          color: "#e5e7eb",
-                        }}
-                      >
-                        {event.category || "Live event"}
-                      </p>
-                      <h2
-                        style={{
-                          margin: 0,
-                          fontSize: 36,
-                          lineHeight: 0.95,
-                          fontWeight: 800,
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {event.title}
-                      </h2>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 10,
-                  marginBottom: 12,
-                }}
-              >
-                {event.category ? (
-                  <span
-                    style={{
-                      border: "1px solid rgba(255,255,255,0.18)",
-                      padding: "7px 12px",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: 1,
-                      textTransform: "uppercase",
-                      color: "#e5e7eb",
-                    }}
-                  >
-                    {event.category}
-                  </span>
-                ) : null}
-
-                {lowestPrice !== null ? (
-                  <span
-                    style={{
-                      border: "1px solid rgba(255,255,255,0.18)",
-                      padding: "7px 12px",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: 1,
-                      textTransform: "uppercase",
-                      color: "#e5e7eb",
-                    }}
-                  >
-                    {lowestPrice === 0 ? "FREE" : `FROM ${formatMoney(lowestPrice)}`}
-                  </span>
-                ) : allPrimaryTicketsSoldOut ? (
-                  <span
-                    style={{
-                      border: "1px solid #ff4d57",
-                      padding: "7px 12px",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: 1,
-                      textTransform: "uppercase",
-                      color: "#ff4d57",
-                    }}
-                  >
-                    SOLD OUT
-                  </span>
                 ) : null}
               </div>
 
               <div style={{ marginBottom: 24 }}>
-                <h3
-                  style={{
-                    margin: "0 0 4px",
-                    fontSize: 16,
-                    fontWeight: 700,
-                  }}
-                >
+                <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>
                   {primaryVenueName}
                 </h3>
-
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#d1d5db",
-                    fontSize: 13,
-                  }}
-                >
+                <p style={{ margin: 0, color: "#d1d5db", fontSize: 13 }}>
                   {primaryVenueAddress}
                 </p>
               </div>
 
-              <div
+              <button
+                type="button"
+                onClick={handleShare}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  flexWrap: "wrap",
-                  marginBottom: 18,
+                  background: "transparent",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  color: "white",
+                  padding: "8px 12px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
                 }}
               >
-                <a
-                  href="#"
-                  style={{
-                    color: "#8b5cf6",
-                    textDecoration: "underline",
-                    fontWeight: 600,
-                    fontSize: 12,
-                  }}
-                >
-                  GOT A CODE?
-                </a>
-
-                <button
-                  type="button"
-                  onClick={handleShare}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    color: "white",
-                    padding: "8px 12px",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  SHARE EVENT
-                </button>
-              </div>
+                SHARE EVENT
+              </button>
 
               {shareMessage ? (
-                <p
-                  style={{
-                    margin: "0 0 20px",
-                    fontSize: 12,
-                    color: "#d1d5db",
-                  }}
-                >
+                <p style={{ marginTop: 10, fontSize: 12, color: "#d1d5db" }}>
                   {shareMessage}
                 </p>
               ) : null}
@@ -1507,16 +1398,7 @@ export default function EventPage() {
                       }}
                     />
                   </>
-                ) : (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      background:
-                        "linear-gradient(90deg, rgba(249,115,22,0.35), rgba(59,130,246,0.35))",
-                    }}
-                  />
-                )}
+                ) : null}
 
                 <div
                   style={{
@@ -1528,17 +1410,9 @@ export default function EventPage() {
                     justifyContent: "center",
                   }}
                 >
-                  <p
-                    style={{
-                      margin: "0 0 10px",
-                      color: "#e5e7eb",
-                      fontSize: 16,
-                      fontWeight: 500,
-                    }}
-                  >
+                  <p style={{ margin: "0 0 10px", color: "#e5e7eb" }}>
                     By Swift Tickets
                   </p>
-
                   <h1
                     style={{
                       margin: "0 0 10px",
@@ -1550,14 +1424,7 @@ export default function EventPage() {
                   >
                     {event.title}
                   </h1>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 16,
-                      color: "#f3f4f6",
-                    }}
-                  >
+                  <p style={{ margin: 0, fontSize: 16, color: "#f3f4f6" }}>
                     {formattedDate} · {formattedTime}
                   </p>
                 </div>
@@ -1575,22 +1442,19 @@ export default function EventPage() {
                 }}
               >
                 <div>
-                  <div
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 700,
-                      letterSpacing: "-0.5px",
-                    }}
-                  >
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>
                     {lowestPrice !== null
                       ? `TICKETS FROM ${
                           lowestPrice === 0 ? "FREE" : formatMoney(lowestPrice)
                         }`
                       : allPrimaryTicketsSoldOut
                       ? "SOLD OUT"
+                      : hasUpcomingTickets
+                      ? "COMING SOON"
+                      : hasSalesEndedTickets
+                      ? "SALES ENDED"
                       : "TICKETS"}
                   </div>
-
                   <div
                     style={{
                       marginTop: 4,
@@ -1603,9 +1467,9 @@ export default function EventPage() {
                   >
                     {lowestPrice === 0
                       ? "No extra fees"
-                      : allPrimaryTicketsSoldOut
-                      ? "No tickets available"
-                      : "Includes all fees"}
+                      : lowestPrice !== null
+                      ? "Includes all fees"
+                      : "Check ticket availability below"}
                   </div>
                 </div>
 
@@ -1621,7 +1485,7 @@ export default function EventPage() {
                     cursor: "pointer",
                   }}
                 >
-                  {allPrimaryTicketsSoldOut ? "VIEW TICKETS" : "GET TICKETS"}
+                  VIEW TICKETS
                 </button>
               </div>
 
@@ -1655,118 +1519,45 @@ export default function EventPage() {
                   </button>
                 ) : null}
 
-                <button
-                  onClick={() => setActiveTab("tickets")}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: activeTab === "tickets" ? "white" : "#9ca3af",
-                    padding: "0 0 12px",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    borderBottom:
-                      activeTab === "tickets"
-                        ? "2px solid white"
-                        : "2px solid transparent",
-                  }}
-                >
-                  TICKETS
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("about")}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: activeTab === "about" ? "white" : "#9ca3af",
-                    padding: "0 0 12px",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    borderBottom:
-                      activeTab === "about"
-                        ? "2px solid white"
-                        : "2px solid transparent",
-                  }}
-                >
-                  ABOUT
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("venue")}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: activeTab === "venue" ? "white" : "#9ca3af",
-                    padding: "0 0 12px",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    borderBottom:
-                      activeTab === "venue"
-                        ? "2px solid white"
-                        : "2px solid transparent",
-                  }}
-                >
-                  VENUE
-                </button>
-              </div>
-
-              {activeTab === "lineup" && lineupItems.length > 0 ? (
-                <div>
-                  <h2
+                {(["tickets", "about", "venue"] as ActiveTab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
                     style={{
-                      margin: "0 0 20px",
-                      fontSize: 35,
-                      fontWeight: 800,
-                      letterSpacing: "-1px",
+                      background: "transparent",
+                      border: "none",
+                      color: activeTab === tab ? "white" : "#9ca3af",
+                      padding: "0 0 12px",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      borderBottom:
+                        activeTab === tab
+                          ? "2px solid white"
+                          : "2px solid transparent",
                     }}
                   >
-                    Line Up
-                  </h2>
-
-                  <div style={{ display: "grid", gap: 14 }}>
-                    {lineupItems.map((artist, index) => (
-                      <div
-                        key={`${artist}-${index}`}
-                        style={{
-                          fontSize: 18,
-                          fontWeight: 700,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {artist}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+                    {tab.toUpperCase()}
+                  </button>
+                ))}
+              </div>
 
               {activeTab === "tickets" ? (
                 <div>
-                  <h2
-                    style={{
-                      margin: "0 0 20px",
-                      fontSize: 35,
-                      fontWeight: 800,
-                      letterSpacing: "-1px",
-                    }}
-                  >
+                  <h2 style={{ margin: "0 0 20px", fontSize: 35, fontWeight: 800 }}>
                     Tickets
                   </h2>
 
                   <div style={{ display: "grid", gap: 16 }}>
-                    {ticketTypes.map((ticket: any) => renderTicketCard(ticket, false))}
+                    {ticketTypes.map((ticket: any) =>
+                      renderTicketCard(ticket, false)
+                    )}
 
                     {resaleTickets.map((item: any) => (
                       <Link
                         key={item.resale.id}
                         href={`/resale/${item.resale.id}`}
-                        style={{
-                          textDecoration: "none",
-                          color: "white",
-                        }}
+                        style={{ textDecoration: "none", color: "white" }}
                       >
                         <div
                           style={{
@@ -1780,50 +1571,16 @@ export default function EventPage() {
                           }}
                         >
                           <div>
-                            <h3
-                              style={{
-                                margin: "0 0 8px",
-                                fontSize: 16,
-                                fontWeight: 700,
-                              }}
-                            >
+                            <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>
                               {item.ticketType?.name} · Resale
                             </h3>
-                            <p
-                              style={{
-                                margin: "0 0 8px",
-                                color: "#e5e7eb",
-                                fontSize: 12,
-                                lineHeight: 1.5,
-                              }}
-                            >
-                              Verified fan-to-fan resale ticket bought through
-                              Swift Tickets.
-                            </p>
-                            <p
-                              style={{
-                                margin: 0,
-                                color: "#fdba74",
-                                fontSize: 11,
-                                fontWeight: 700,
-                                textTransform: "uppercase",
-                                letterSpacing: 0.8,
-                              }}
-                            >
-                              Resale listing
+                            <p style={{ margin: 0, color: "#e5e7eb", fontSize: 12 }}>
+                              Verified fan-to-fan resale ticket bought through Swift Tickets.
                             </p>
                           </div>
-
-                          <div
-                            style={{
-                              whiteSpace: "nowrap",
-                              fontSize: 16,
-                              fontWeight: 700,
-                              color: "#fdba74",
-                            }}
-                          >
+                          <strong style={{ color: "#fdba74" }}>
                             {formatMoney(Number(item.resale.resale_price || 0))} →
-                          </div>
+                          </strong>
                         </div>
                       </Link>
                     ))}
@@ -1831,17 +1588,9 @@ export default function EventPage() {
                 </div>
               ) : activeTab === "about" ? (
                 <div>
-                  <h2
-                    style={{
-                      margin: "0 0 20px",
-                      fontSize: 40,
-                      fontWeight: 800,
-                      letterSpacing: "-1px",
-                    }}
-                  >
+                  <h2 style={{ margin: "0 0 20px", fontSize: 40, fontWeight: 800 }}>
                     About
                   </h2>
-
                   <div
                     style={{
                       border: "1px solid rgba(255,255,255,0.2)",
@@ -1861,19 +1610,11 @@ export default function EventPage() {
                     </p>
                   </div>
                 </div>
-              ) : (
+              ) : activeTab === "venue" ? (
                 <div>
-                  <h2
-                    style={{
-                      margin: "0 0 20px",
-                      fontSize: 40,
-                      fontWeight: 800,
-                      letterSpacing: "-1px",
-                    }}
-                  >
+                  <h2 style={{ margin: "0 0 20px", fontSize: 40, fontWeight: 800 }}>
                     Venue
                   </h2>
-
                   <div
                     style={{
                       border: "1px solid rgba(255,255,255,0.2)",
@@ -1881,21 +1622,25 @@ export default function EventPage() {
                       lineHeight: 1.7,
                     }}
                   >
-                    <div>
-                      <p
-                        style={{
-                          marginTop: 0,
-                          marginBottom: 6,
-                          fontSize: 18,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {primaryVenueName}
-                      </p>
-                      <p style={{ color: "#d1d5db", fontSize: 15, margin: 0 }}>
-                        {primaryVenueAddress}
-                      </p>
-                    </div>
+                    <p style={{ marginTop: 0, marginBottom: 6, fontSize: 18 }}>
+                      {primaryVenueName}
+                    </p>
+                    <p style={{ color: "#d1d5db", fontSize: 15, margin: 0 }}>
+                      {primaryVenueAddress}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <h2 style={{ margin: "0 0 20px", fontSize: 35, fontWeight: 800 }}>
+                    Line Up
+                  </h2>
+                  <div style={{ display: "grid", gap: 14 }}>
+                    {lineupItems.map((artist, index) => (
+                      <div key={`${artist}-${index}`} style={{ fontSize: 18 }}>
+                        {artist}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

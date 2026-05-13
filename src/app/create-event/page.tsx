@@ -10,14 +10,35 @@ type TicketInput = {
   description: string;
   price: string;
   quantity: string;
+  sales_start_at: string;
+  sales_end_at: string;
+};
+
+const emptyTicket: TicketInput = {
+  name: "",
+  description: "",
+  price: "",
+  quantity: "",
+  sales_start_at: "",
+  sales_end_at: "",
 };
 
 const categories = ["festival", "music", "lifestyle", "business"];
 const creatorTypes = ["organiser", "venue"] as const;
 type CreatorType = (typeof creatorTypes)[number] | "";
 
+function createSlug(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export default function CreateEventPage() {
   const [title, setTitle] = useState("");
+  const [customSlug, setCustomSlug] = useState("");
   const [venueName, setVenueName] = useState("");
   const [venueAddress, setVenueAddress] = useState("");
   const [location, setLocation] = useState("");
@@ -36,9 +57,7 @@ export default function CreateEventPage() {
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
-  const [tickets, setTickets] = useState<TicketInput[]>([
-    { name: "", description: "", price: "", quantity: "" },
-  ]);
+  const [tickets, setTickets] = useState<TicketInput[]>([{ ...emptyTicket }]);
 
   useEffect(() => {
     return () => {
@@ -71,10 +90,7 @@ export default function CreateEventPage() {
   }, []);
 
   const addTicket = () => {
-    setTickets((prev) => [
-      ...prev,
-      { name: "", description: "", price: "", quantity: "" },
-    ]);
+    setTickets((prev) => [...prev, { ...emptyTicket }]);
   };
 
   const removeTicket = (index: number) => {
@@ -98,7 +114,9 @@ export default function CreateEventPage() {
 
   const previewDate = useMemo(() => {
     if (!combinedDateTime) return "Select date and time";
+
     const parsed = new Date(combinedDateTime);
+
     if (Number.isNaN(parsed.getTime())) return "Select date and time";
 
     return parsed.toLocaleString("en-ZA", {
@@ -111,12 +129,22 @@ export default function CreateEventPage() {
     });
   }, [combinedDateTime]);
 
+  const cleanedSlug = useMemo(() => {
+    return createSlug(customSlug || title);
+  }, [customSlug, title]);
+
+  const previewUrl = useMemo(() => {
+    if (!cleanedSlug) return "swifttickets.co.za/events/your-event-url";
+    return `swifttickets.co.za/events/${cleanedSlug}`;
+  }, [cleanedSlug]);
+
   const lowestTicketPrice = useMemo(() => {
     const validPrices = tickets
       .map((ticket) => Number(ticket.price))
       .filter((price) => !Number.isNaN(price) && price >= 0);
 
     if (validPrices.length === 0) return null;
+
     return Math.min(...validPrices);
   }, [tickets]);
 
@@ -184,6 +212,11 @@ export default function CreateEventPage() {
         return;
       }
 
+      if (!cleanedSlug) {
+        alert("Please enter a valid custom event URL");
+        return;
+      }
+
       if (!venueName.trim()) {
         alert("Please enter a venue name");
         return;
@@ -244,6 +277,35 @@ export default function CreateEventPage() {
           alert("Each ticket must have a valid quantity");
           return;
         }
+
+        if (
+          ticket.sales_start_at &&
+          ticket.sales_end_at &&
+          new Date(ticket.sales_start_at).getTime() >
+            new Date(ticket.sales_end_at).getTime()
+        ) {
+          alert(
+            `Sales start date cannot be after sales end date for ${ticket.name}`
+          );
+          return;
+        }
+      }
+
+      const { data: existingSlug, error: slugCheckError } = await supabase
+        .from("events")
+        .select("id")
+        .eq("slug", cleanedSlug)
+        .maybeSingle();
+
+      if (slugCheckError) {
+        console.error("Slug check error:", slugCheckError);
+        alert(`Error checking custom URL: ${slugCheckError.message}`);
+        return;
+      }
+
+      if (existingSlug) {
+        alert("This custom event URL is already taken. Please choose another.");
+        return;
       }
 
       const imageUrl = await uploadPoster();
@@ -255,6 +317,7 @@ export default function CreateEventPage() {
         .insert([
           {
             title: title.trim(),
+            slug: cleanedSlug,
             venue_name: venueName.trim(),
             venue_address: venueAddress.trim(),
             location: safeLocation,
@@ -273,6 +336,12 @@ export default function CreateEventPage() {
 
       if (eventError) {
         console.error("Event creation error:", eventError);
+
+        if (eventError.message.toLowerCase().includes("duplicate")) {
+          alert("This custom event URL is already taken. Please choose another.");
+          return;
+        }
+
         alert(`Error creating event: ${eventError.message}`);
         return;
       }
@@ -283,6 +352,15 @@ export default function CreateEventPage() {
         description: t.description.trim(),
         price: Number(t.price),
         quantity: Number(t.quantity),
+        remaining_quantity: Number(t.quantity),
+        sold_count: 0,
+        sold_out: Number(t.quantity) <= 0,
+        sales_start_at: t.sales_start_at
+          ? new Date(t.sales_start_at).toISOString()
+          : null,
+        sales_end_at: t.sales_end_at
+          ? new Date(t.sales_end_at).toISOString()
+          : null,
       }));
 
       const { error: ticketError } = await supabase
@@ -298,6 +376,7 @@ export default function CreateEventPage() {
       alert("Event + Tickets created successfully!");
 
       setTitle("");
+      setCustomSlug("");
       setVenueName("");
       setVenueAddress("");
       setLocation("");
@@ -315,7 +394,7 @@ export default function CreateEventPage() {
       }
 
       setPosterPreview("");
-      setTickets([{ name: "", description: "", price: "", quantity: "" }]);
+      setTickets([{ ...emptyTicket }]);
     } catch (error) {
       console.error("Unexpected error:", error);
       alert(
@@ -370,363 +449,355 @@ export default function CreateEventPage() {
         </div>
       </main>
     );
-  }
-
-  return (
+  }  return (
     <main className="min-h-screen bg-black text-white">
-      <div className="mx-auto max-w-[1440px] px-6 py-8 md:px-8 md:py-10">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[360px_1fr] lg:gap-12">
-          <div>
-            <div className="relative mb-4 aspect-[0.9] w-full overflow-hidden bg-[linear-gradient(135deg,#334155,#0f172a,#1e293b)]">
-              {posterPreview ? (
-                <Image
-                  src={posterPreview}
-                  alt="Poster preview"
-                  fill
-                  unoptimized
-                  className="object-cover"
-                />
-              ) : (
-                <>
-                  <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(249,115,22,0.35),rgba(59,130,246,0.25),rgba(0,0,0,0.65))]" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                </>
-              )}
+      <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/logo.svg"
+              alt="Swift Tickets"
+              width={340}
+              height={120}
+              className="h-16 w-auto object-contain md:h-20"
+              priority
+            />
+          </Link>
 
-              <div className="absolute inset-x-0 bottom-0 p-6">
-                <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-gray-300">
-                  {category || "Live event"}
-                </p>
-                <h2 className="text-[34px] font-extrabold uppercase leading-[0.95]">
-                  {title || "Your Event"}
-                </h2>
-              </div>
-            </div>
+          <Link
+            href="/dashboard"
+            className="border border-white/15 px-5 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black"
+          >
+            Dashboard
+          </Link>
+        </div>
 
-            <h3 className="mb-1 text-[16px] font-semibold">
-              {venueName || "Your venue"}
-            </h3>
-
-            <p className="mb-1 text-[13px] text-white/70">
-              {venueAddress || "Your venue address"}
-            </p>
-
-            <p className="mb-3 text-[12px] text-gray-300">{previewDate}</p>
-
-            <p className="mb-6 text-[13px] leading-6 text-white/70">
-              {description || "Your event description will appear here."}
-            </p>
-
-            <div className="border border-white/15 bg-white/[0.03] p-4">
-              <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-white/60">
-                Tickets from
+        <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+          <section className="space-y-8">
+            <div>
+              <p className="text-[12px] font-black uppercase tracking-[0.22em] text-white/40">
+                Swift Tickets
               </p>
-              <p className="text-[24px] font-extrabold">
-                {lowestTicketPrice !== null
-                  ? lowestTicketPrice === 0
-                    ? "FREE"
-                    : `R${lowestTicketPrice.toFixed(2)}`
-                  : "R0.00"}
+
+              <h1 className="mt-2 text-[42px] font-black leading-none tracking-[-0.05em] md:text-[62px]">
+                Create Event
+              </h1>
+
+              <p className="mt-4 max-w-2xl text-base leading-7 text-white/60">
+                Create events, launch ticket sales and manage presales with
+                timed ticket releases.
               </p>
             </div>
-          </div>
 
-          <div>
-            <div className="relative mb-6 overflow-hidden border border-white/10 bg-white/[0.03]">
-              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(249,115,22,0.14),rgba(59,130,246,0.14))]" />
-              <div className="relative px-6 py-6 md:px-8 md:py-7">
-                <p className="mb-2 text-[15px] text-gray-200">
-                  By Swift Tickets
-                </p>
-                <h1 className="mb-2 text-[42px] font-extrabold leading-[0.95] tracking-[-0.03em] md:text-[56px]">
-                  Create Event
-                </h1>
-                <p className="text-[14px] text-white/75">
-                  Build your event listing, upload your poster, and add ticket
-                  types in one place.
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-8 border border-white/15">
-              <div className="border-b border-white/15 px-6 py-4">
-                <h2 className="text-[28px] font-extrabold tracking-[-0.03em]">
-                  Event Details
-                </h2>
-              </div>
-
-              <div className="grid gap-5 p-6 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+            <div className="border border-white/10 bg-white/[0.03] p-5 md:p-7">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
                     Event Title
                   </label>
                   <input
-                    placeholder="Enter your event title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                    placeholder=""
+                    className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                <div>
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                    Organizer Email
+                  </label>
+                  <input
+                    type="email"
+                    value={organizerEmail}
+                    onChange={(e) => setOrganizerEmail(e.target.value)}
+                    placeholder=""
+                    className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                  Custom Event URL
+                </label>
+                <input
+                  value={customSlug}
+                  onChange={(e) => setCustomSlug(e.target.value)}
+                  placeholder=""
+                  className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
+                />
+                <p className="mt-3 text-sm text-white/45">{previewUrl}</p>
+              </div>
+
+              <div className="mt-5 grid gap-5 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
                     Venue Name
                   </label>
                   <input
-                    placeholder="e.g. The Luxee Lounge"
                     value={venueName}
                     onChange={(e) => setVenueName(e.target.value)}
-                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                    placeholder=""
+                    className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                <div>
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
                     Venue Address
                   </label>
                   <input
-                    placeholder="e.g. 14 Staib Street, New Doornfontein, Johannesburg"
                     value={venueAddress}
                     onChange={(e) => {
                       setVenueAddress(e.target.value);
                       setLocation(e.target.value);
                     }}
-                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                    placeholder=""
+                    className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
                   />
                 </div>
+              </div>
 
+              <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
                     Event Date
                   </label>
                   <input
                     type="date"
                     value={eventDate}
                     onChange={(e) => setEventDate(e.target.value)}
-                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition focus:border-white/70"
+                    className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
                     Event Time
                   </label>
                   <input
                     type="time"
                     value={eventTime}
                     onChange={(e) => setEventTime(e.target.value)}
-                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition focus:border-white/70"
+                    className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
                   />
                 </div>
+              </div>
 
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                    Organizer Email
-                  </label>
-                  <input
-                    placeholder="name@example.com"
-                    value={organizerEmail}
-                    onChange={(e) => setOrganizerEmail(e.target.value)}
-                    className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
-                  />
-                </div>
-
+              <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
                     Category
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="h-12 w-full border border-white/20 bg-black px-4 text-[15px] outline-none transition focus:border-white/70"
+                    className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
                   >
                     <option value="">Select category</option>
                     {categories.map((item) => (
                       <option key={item} value={item}>
-                        {item.charAt(0).toUpperCase() + item.slice(1)}
+                        {item}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                    Event Poster
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                    Creator Type
                   </label>
-                  <input
-                    type="file"
-                    accept="image/*"
+                  <select
+                    value={creatorType}
                     onChange={(e) =>
-                      handlePosterChange(e.target.files?.[0] || null)
+                      setCreatorType(e.target.value as CreatorType)
                     }
-                    className="block h-12 w-full border border-white/20 bg-transparent px-4 py-3 text-[14px] text-white file:mr-4 file:border-0 file:bg-white file:px-3 file:py-2 file:text-[12px] file:font-semibold file:text-black"
-                  />
+                    className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
+                  >
+                    <option value="">Select type</option>
+                    {creatorTypes.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                  Description
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder=""
+                  rows={6}
+                  className="w-full border border-white/15 bg-black/40 px-5 py-4 text-[15px] outline-none transition focus:border-white/60"
+                />
+              </div>
+
+              <div className="mt-5">
+                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                  Fee Split
+                </label>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => setFeeOption("buyer_pays_all")}
+                    className={`border px-5 py-4 text-left transition ${
+                      feeOption === "buyer_pays_all"
+                        ? "border-white bg-white text-black"
+                        : "border-white/15 bg-black/40 text-white"
+                    }`}
+                  >
+                    <p className="text-[12px] font-black uppercase tracking-[0.08em]">
+                      Buyer Pays All
+                    </p>
+                    <p className="mt-2 text-sm">
+                      Buyer pays ticket price + R3 + 4% service fee.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFeeOption("organizer_pays_all")}
+                    className={`border px-5 py-4 text-left transition ${
+                      feeOption === "organizer_pays_all"
+                        ? "border-white bg-white text-black"
+                        : "border-white/15 bg-black/40 text-white"
+                    }`}
+                  >
+                    <p className="text-[12px] font-black uppercase tracking-[0.08em]">
+                      Organiser Pays All
+                    </p>
+                    <p className="mt-2 text-sm">
+                      Buyer pays ticket price only. Organiser pays R3 + 4% from
+                      payout.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFeeOption("split")}
+                    className={`border px-5 py-4 text-left transition ${
+                      feeOption === "split"
+                        ? "border-white bg-white text-black"
+                        : "border-white/15 bg-black/40 text-white"
+                    }`}
+                  >
+                    <p className="text-[12px] font-black uppercase tracking-[0.08em]">
+                      Split Fees
+                    </p>
+                    <p className="mt-2 text-sm">
+                      Buyer pays ticket price + 4%. Organiser pays R3 from
+                      payout.
+                    </p>
+                  </button>
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                    Event Description
-                  </label>
-                  <textarea
-                    placeholder="Tell people what your event is about"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={5}
-                    className="w-full border border-white/20 bg-transparent px-4 py-3 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
-                  />
+                <div className="mt-4 border border-white/10 bg-black/30 p-4 text-[13px] leading-6 text-white/60">
+                  <p>
+                    <span className="font-bold text-white">Platform fee:</span>{" "}
+                    R3 + 4% per paid ticket.
+                  </p>
+                  <p>
+                    Free tickets remain free and do not attract platform fees.
+                  </p>
                 </div>
 
-                <div className="md:col-span-2 border border-white/15 p-5">
-                  <h3 className="mb-4 text-[18px] font-bold">Fees</h3>
-
-                  <p className="mb-2 text-[13px] text-white/60">
-                    Platform fee: <span className="font-bold">R3 + 4%</span> per
-                    paid ticket
-                  </p>
-
-                  <p className="mb-4 text-[12px] text-white/45">
-                    Free tickets remain free. No platform fee is charged on
-                    tickets priced at R0.00.
-                  </p>
-
-                  <div className="grid gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setFeeOption("buyer_pays_all")}
-                      className={`border p-4 text-left transition ${
-                        feeOption === "buyer_pays_all"
-                          ? "border-white bg-white text-black"
-                          : "border-white/20 hover:border-white"
-                      }`}
-                    >
-                      <p className="font-bold">Buyer pays all</p>
-                      <p className="text-sm opacity-80">
-                        Buyer pays R3 + 4% on top of the ticket price
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setFeeOption("organizer_pays_all")}
-                      className={`border p-4 text-left transition ${
-                        feeOption === "organizer_pays_all"
-                          ? "border-white bg-white text-black"
-                          : "border-white/20 hover:border-white"
-                      }`}
-                    >
-                      <p className="font-bold">Organiser pays all</p>
-                      <p className="text-sm opacity-80">
-                        No extra fee is shown to the buyer. R3 + 4% is deducted
-                        from your payout.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setFeeOption("split")}
-                      className={`border p-4 text-left transition ${
-                        feeOption === "split"
-                          ? "border-white bg-white text-black"
-                          : "border-white/20 hover:border-white"
-                      }`}
-                    >
-                      <p className="font-bold">Split fees</p>
-                      <p className="text-sm opacity-80">
-                        Buyer pays 4% and organiser pays R3 per paid ticket.
-                      </p>
-                    </button>
+                {hasFreeTickets && (
+                  <div className="mt-4 border border-emerald-500/25 bg-emerald-500/10 p-4 text-[13px] text-emerald-200">
+                    One or more ticket types are free. Free tickets will not be
+                    charged any platform fee regardless of the fee option
+                    selected.
                   </div>
+                )}
+              </div>
 
-                  {hasFreeTickets && (
-                    <div className="mt-4 border border-emerald-500/25 bg-emerald-500/10 p-4 text-[13px] text-emerald-200">
-                      One or more of your ticket types are free. Free tickets
-                      will not be charged any platform fee regardless of the fee
-                      option selected.
-                    </div>
-                  )}
-                </div>
+              <div className="mt-5">
+                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                  Event Poster
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    handlePosterChange(e.target.files?.[0] || null)
+                  }
+                  className="block w-full text-sm text-white"
+                />
+
+                {posterPreview && (
+                  <div className="relative mt-4 h-[320px] overflow-hidden border border-white/10">
+                    <Image
+                      src={posterPreview}
+                      alt="Poster preview"
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="mb-8">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-[35px] font-extrabold tracking-[-0.04em]">
-                  Tickets
-                </h2>
+            <div className="border border-white/10 bg-white/[0.03] p-5 md:p-7">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <p className="text-[12px] font-black uppercase tracking-[0.18em] text-white/40">
+                    Ticketing
+                  </p>
+                  <h2 className="mt-1 text-[34px] font-black tracking-[-0.05em]">
+                    Ticket Types
+                  </h2>
+                </div>
 
                 <button
+                  type="button"
                   onClick={addTicket}
-                  disabled={loading}
-                  className="border border-white/70 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.08em] transition hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                  className="bg-white px-5 py-3 text-[11px] font-black uppercase tracking-[0.08em] text-black transition hover:bg-white/90"
                 >
-                  + Add Ticket
+                  Add Ticket
                 </button>
               </div>
 
-              <div className="grid gap-4">
+              <div className="space-y-5">
                 {tickets.map((ticket, index) => (
                   <div
                     key={index}
-                    className="border border-white/65 bg-transparent p-5"
+                    className="border border-white/10 bg-black/30 p-5"
                   >
-                    <div className="mb-4 flex items-center justify-between gap-4">
-                      <p className="text-[16px] font-bold">
+                    <div className="mb-5 flex items-center justify-between">
+                      <h3 className="text-[22px] font-black tracking-[-0.04em]">
                         Ticket {index + 1}
-                      </p>
+                      </h3>
 
                       {tickets.length > 1 && (
                         <button
                           type="button"
                           onClick={() => removeTicket(index)}
-                          className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/60 transition hover:text-white"
+                          className="text-sm font-bold text-red-300 transition hover:text-red-200"
                         >
                           Remove
                         </button>
                       )}
                     </div>
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="md:col-span-2">
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <div>
                         <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
                           Ticket Name
                         </label>
                         <input
-                          placeholder="e.g. General, VIP, Early Bird"
                           value={ticket.name}
                           onChange={(e) =>
                             updateTicket(index, "name", e.target.value)
                           }
-                          className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
-                        />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
-                          Description
-                        </label>
-                        <input
-                          placeholder="What does this ticket include?"
-                          value={ticket.description}
-                          onChange={(e) =>
-                            updateTicket(index, "description", e.target.value)
-                          }
-                          className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
-                          Price
-                        </label>
-                        <input
-                          placeholder="0.00"
-                          type="number"
-                          min="0"
-                          value={ticket.price}
-                          onChange={(e) =>
-                            updateTicket(index, "price", e.target.value)
-                          }
-                          className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                          placeholder=""
+                          className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
                         />
                       </div>
 
@@ -735,14 +806,82 @@ export default function CreateEventPage() {
                           Quantity
                         </label>
                         <input
-                          placeholder="0"
                           type="number"
-                          min="0"
                           value={ticket.quantity}
                           onChange={(e) =>
                             updateTicket(index, "quantity", e.target.value)
                           }
-                          className="h-12 w-full border border-white/20 bg-transparent px-4 text-[15px] outline-none transition placeholder:text-white/30 focus:border-white/70"
+                          placeholder=""
+                          className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-5 md:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Price
+                        </label>
+                        <input
+                          type="number"
+                          value={ticket.price}
+                          onChange={(e) =>
+                            updateTicket(index, "price", e.target.value)
+                          }
+                          placeholder=""
+                          className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Description
+                        </label>
+                        <input
+                          value={ticket.description}
+                          onChange={(e) =>
+                            updateTicket(index, "description", e.target.value)
+                          }
+                          placeholder=""
+                          className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-5 md:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Sales Start
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={ticket.sales_start_at}
+                          onChange={(e) =>
+                            updateTicket(
+                              index,
+                              "sales_start_at",
+                              e.target.value
+                            )
+                          }
+                          className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+                          Sales End
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={ticket.sales_end_at}
+                          onChange={(e) =>
+                            updateTicket(
+                              index,
+                              "sales_end_at",
+                              e.target.value
+                            )
+                          }
+                          className="h-14 w-full border border-white/15 bg-black/40 px-5 text-[15px] outline-none transition focus:border-white/60"
                         />
                       </div>
                     </div>
@@ -751,20 +890,97 @@ export default function CreateEventPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4">
-              <button
-                onClick={handleCreateEvent}
-                disabled={loading}
-                className="bg-white px-8 py-4 text-[12px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? "Creating..." : "Create Event"}
-              </button>
+            <button
+              type="button"
+              onClick={handleCreateEvent}
+              disabled={loading}
+              className="w-full bg-white px-6 py-5 text-[13px] font-black uppercase tracking-[0.12em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Creating Event..." : "Create Event"}
+            </button>
+          </section>
 
-              <p className="text-[12px] uppercase tracking-[0.08em] text-white/45">
-                Your event, poster and ticket types will be created together
-              </p>
+          <aside className="space-y-5">
+            <div className="overflow-hidden border border-white/10 bg-white/[0.03]">
+              <div className="relative aspect-[0.8] bg-white/5">
+                {posterPreview ? (
+                  <Image
+                    src={posterPreview}
+                    alt="Poster preview"
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.3),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.25),transparent_35%),#111]" />
+                )}
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+
+                <div className="absolute bottom-0 left-0 right-0 p-6">
+                  <p className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/50">
+                    {category || "Category"}
+                  </p>
+
+                  <h2 className="text-[34px] font-black leading-none tracking-[-0.05em]">
+                    {title || "Your Event"}
+                  </h2>
+
+                  <p className="mt-4 text-sm text-white/65">{previewDate}</p>
+
+                  <p className="mt-1 text-sm text-white/55">
+                    {venueName || "Venue Name"}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+
+            <div className="border border-white/10 bg-white/[0.03] p-6">
+              <h3 className="text-[26px] font-black tracking-[-0.05em]">
+                Event Summary
+              </h3>
+
+              <div className="mt-5 grid gap-4">
+                <div className="border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                    Custom URL
+                  </p>
+                  <p className="mt-2 break-all text-[14px] font-bold text-white/70">
+                    {previewUrl}
+                  </p>
+                </div>
+
+                <div className="border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                    Ticket Types
+                  </p>
+                  <p className="mt-2 text-[28px] font-black">
+                    {tickets.length}
+                  </p>
+                </div>
+
+                <div className="border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                    Lowest Price
+                  </p>
+                  <p className="mt-2 text-[28px] font-black">
+                    {lowestTicketPrice !== null
+                      ? `R${lowestTicketPrice}`
+                      : "N/A"}
+                  </p>
+                </div>
+
+                <div className="border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                    Free Tickets
+                  </p>
+                  <p className="mt-2 text-[28px] font-black">
+                    {hasFreeTickets ? "Yes" : "No"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
 
