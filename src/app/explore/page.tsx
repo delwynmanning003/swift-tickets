@@ -18,12 +18,11 @@ type EventType = {
 
 const quickSearches = ["Amapiano", "Festival", "Business", "Brunch", "Live Music"];
 
-const categories = [
-  { label: "All", value: "" },
-  { label: "Festival", value: "festival" },
-  { label: "Music", value: "music" },
-  { label: "Lifestyle", value: "lifestyle" },
-  { label: "Business", value: "business" },
+const categoryCards = [
+  { label: "Festival", value: "festival", image: "/categories/festival.jpg" },
+  { label: "Music", value: "music", image: "/categories/music.jpg" },
+  { label: "Lifestyle", value: "lifestyle", image: "/categories/lifestyle.jpg" },
+  { label: "Business", value: "business", image: "/categories/business.jpg" },
 ];
 
 function formatEventDate(value?: string | null) {
@@ -32,13 +31,9 @@ function formatEventDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return date.toLocaleString("en-ZA", {
-    weekday: "short",
+  return date.toLocaleDateString("en-ZA", {
     day: "numeric",
     month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   });
 }
 
@@ -50,6 +45,51 @@ function buildExploreUrl(category: string, searchQuery: string) {
 
   const queryString = params.toString();
   return queryString ? `/explore?${queryString}` : "/explore";
+}
+
+function EventCard({ event }: { event: EventType }) {
+  return (
+    <Link href={`/events/${event.id}`} className="group w-[230px] shrink-0 sm:w-auto">
+      <div className="relative h-[230px] w-full overflow-hidden rounded-[24px] bg-white/10">
+        {event.image_url ? (
+          <Image
+            src={event.image_url}
+            alt={event.title}
+            fill
+            className="object-cover transition duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-white/35">
+            No image
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+
+        <button
+          type="button"
+          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-xl text-white backdrop-blur"
+        >
+          ♡
+        </button>
+      </div>
+
+      <div className="mt-3 px-1">
+        <h2 className="line-clamp-2 text-[20px] font-black leading-tight tracking-[-0.03em]">
+          {event.title}
+        </h2>
+
+        <p className="mt-2 line-clamp-1 text-[15px] text-white/60">
+          {formatEventDate(event.event_date)} ·{" "}
+          {event.location || "Location coming soon"}
+        </p>
+
+        <p className="mt-1 text-[15px] text-white/45">
+          {event.category || "Event"}
+        </p>
+      </div>
+    </Link>
+  );
 }
 
 function ExploreContent() {
@@ -117,249 +157,202 @@ function ExploreContent() {
     router.push(buildExploreUrl(category, cleaned));
   };
 
-  const clearSearch = () => {
-    setSearchValue("");
-    router.push(buildExploreUrl(category, ""));
-  };
-
   const pageTitle = useMemo(() => {
-    if (searchQuery && category) return `${category} results for "${searchQuery}"`;
-    if (searchQuery) return `Results for "${searchQuery}"`;
+    if (searchQuery) return `Results for ${searchQuery}`;
     if (category) return `${category} events`;
-    return "Explore events";
+    return "Explore";
   }, [category, searchQuery]);
 
-  const featuredEvent = events[0];
-  const otherEvents = featuredEvent ? events.slice(1) : events;
+  const popularEvents = events.slice(0, 8);
+  const moreEvents = events.slice(8);
 
   return (
     <main className="min-h-screen bg-black text-white">
-      <section className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.18),transparent_35%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.16),transparent_35%),#000]">
-        <div className="mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-14">
-          <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.22em] text-white/50">
-            Swift Tickets
-          </p>
+      <div className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-8">
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/logo.svg"
+              alt="Swift Tickets"
+              width={420}
+              height={140}
+              className="h-24 w-auto object-contain md:h-28"
+              priority
+            />
+          </Link>
 
-          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
-            <div>
-              <h1 className="max-w-4xl text-[44px] font-black capitalize leading-[0.95] tracking-[-0.05em] md:text-[72px]">
-                {pageTitle}
-              </h1>
-              <p className="mt-5 max-w-2xl text-base leading-7 text-white/65 md:text-lg">
-                Find events across music, lifestyle, festivals, business, brunches,
-                nightlife and more.
-              </p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="rounded-full border border-white/15 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white hover:text-black md:px-5 md:py-2.5 md:text-[12px]"
+            >
+              Login
+            </Link>
 
-            <div className="border border-white/15 bg-white/[0.04] p-4 shadow-2xl">
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <div className="flex min-w-0 flex-1 items-center gap-3 border border-white/10 bg-black/40 px-4 py-4">
-                  <span className="text-lg text-white/55">⌕</span>
-                  <input
-                    type="text"
-                    value={searchValue}
-                    onChange={(e) => setSearchValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSearch();
-                    }}
-                    placeholder="Search event, city, category..."
-                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
-                  />
-
-                  {searchValue ? (
-                    <button
-                      type="button"
-                      onClick={clearSearch}
-                      className="text-xs font-bold uppercase tracking-[0.08em] text-white/45 hover:text-white"
-                    >
-                      Clear
-                    </button>
-                  ) : null}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleSearch()}
-                  className="bg-white px-6 py-4 text-[12px] font-black uppercase tracking-[0.1em] text-black transition hover:bg-white/90"
-                >
-                  Search
-                </button>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {quickSearches.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => handleSearch(item)}
-                    className="border border-white/15 bg-white/[0.03] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] text-white/65 transition hover:border-white/40 hover:text-white"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Link
+              href="/signup"
+              className="rounded-full bg-white px-4 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-black transition hover:bg-white/90 md:px-5 md:py-2.5 md:text-[12px]"
+            >
+              Sign Up
+            </Link>
           </div>
         </div>
-      </section>
 
-      <div className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <div className="mb-8 flex gap-2 overflow-x-auto pb-2">
-          {categories.map((item) => {
-            const active = item.value === category;
+        <div className="mb-8">
+          <h1 className="text-[42px] font-black capitalize leading-none tracking-[-0.05em] md:text-[72px]">
+            {pageTitle}
+          </h1>
 
-            return (
+          <p className="mt-4 max-w-2xl text-base leading-7 text-white/60">
+            Discover festivals, nightlife, brunches, business events and live
+            experiences across South Africa.
+          </p>
+        </div>
+
+        <div className="mb-8 flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-3">
+          <span className="text-white/45">⌕</span>
+
+          <input
+            type="text"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSearch();
+            }}
+            placeholder="Search events"
+            className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+          />
+
+          {searchValue ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchValue("");
+                router.push(buildExploreUrl(category, ""));
+              }}
+              className="text-xs font-bold uppercase text-white/45"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+
+        <section className="mb-10">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-[28px] font-black tracking-[-0.04em]">
+              Browse Categories
+            </h2>
+
+            <Link
+              href="/explore"
+              className="text-sm text-white/50 transition hover:text-white"
+            >
+              View All
+            </Link>
+          </div>
+
+          <div className="flex gap-4 overflow-x-auto pb-3">
+            {categoryCards.map((item) => (
               <Link
-                key={item.label}
+                key={item.value}
                 href={buildExploreUrl(item.value, searchQuery)}
-                className={`whitespace-nowrap border px-5 py-3 text-[11px] font-black uppercase tracking-[0.12em] transition ${
-                  active
-                    ? "border-white bg-white text-black"
-                    : "border-white/15 text-white/65 hover:border-white/40 hover:text-white"
+                className={`relative flex h-[140px] w-[250px] shrink-0 items-end overflow-hidden rounded-[26px] border p-5 transition ${
+                  category === item.value ? "border-white" : "border-white/10"
                 }`}
               >
-                {item.label}
+                <Image
+                  src={item.image}
+                  alt={item.label}
+                  fill
+                  className="object-cover transition duration-500 hover:scale-105"
+                />
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+
+                <span className="relative z-10 text-[28px] font-black tracking-[-0.05em] text-white">
+                  {item.label}
+                </span>
               </Link>
-            );
-          })}
-        </div>
-
-        <div className="mb-6 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-black tracking-[-0.03em]">
-              {loading ? "Loading events" : `${events.length} event${events.length === 1 ? "" : "s"} found`}
-            </h2>
-            <p className="mt-1 text-sm text-white/45">
-              {searchQuery || category
-                ? "Filtered results based on your search."
-                : "Upcoming events available on Swift Tickets."}
-            </p>
-          </div>
-
-          {(searchQuery || category) && (
-            <Link
-              href="/explore"
-              className="hidden border border-white/20 px-4 py-3 text-[11px] font-black uppercase tracking-[0.1em] text-white/65 transition hover:bg-white hover:text-black sm:inline-block"
-            >
-              Reset
-            </Link>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((item) => (
-              <div key={item} className="h-[430px] animate-pulse border border-white/10 bg-white/[0.03]" />
             ))}
           </div>
-        ) : events.length === 0 ? (
-          <div className="border border-white/10 bg-white/[0.03] p-8 md:p-10">
-            <p className="text-2xl font-black tracking-[-0.03em]">No events found</p>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-white/60">
-              Try another search term or browse all categories.
-            </p>
-            <Link
-              href="/explore"
-              className="mt-6 inline-block bg-white px-6 py-4 text-[12px] font-black uppercase tracking-[0.1em] text-black"
-            >
-              View All Events
-            </Link>
-          </div>
-        ) : (
-          <>
-            {featuredEvent && (
+        </section>
+
+        <section className="mb-10">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-[28px] font-black tracking-[-0.04em]">
+              Popular Events
+            </h2>
+
+            {(category || searchQuery) && (
               <Link
-                href={`/events/${featuredEvent.id}`}
-                className="mb-8 grid overflow-hidden border border-white/15 bg-white/[0.035] transition hover:border-white/35 lg:grid-cols-[0.95fr_1.05fr]"
+                href="/explore"
+                className="text-sm text-white/50 transition hover:text-white"
               >
-                <div className="relative min-h-[360px] bg-white/5">
-                  {featuredEvent.image_url ? (
-                    <Image
-                      src={featuredEvent.image_url}
-                      alt={featuredEvent.title}
-                      fill
-                      className="object-cover"
-                      priority
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-white/30">
-                      No image
-                    </div>
-                  )}
-                  <div className="absolute left-4 top-4 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-black">
-                    Featured
-                  </div>
-                </div>
-
-                <div className="flex flex-col justify-end p-6 md:p-8">
-                  <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em] text-white/45">
-                    {featuredEvent.category || "Event"}
-                  </p>
-                  <h2 className="max-w-3xl text-[38px] font-black leading-[0.95] tracking-[-0.05em] md:text-[58px]">
-                    {featuredEvent.title}
-                  </h2>
-                  <p className="mt-5 text-base text-white/65">
-                    {featuredEvent.location || "Location coming soon"}
-                  </p>
-                  <p className="mt-2 text-sm text-white/45">
-                    {formatEventDate(featuredEvent.event_date)}
-                  </p>
-
-                  <span className="mt-8 inline-flex w-fit bg-white px-6 py-4 text-[12px] font-black uppercase tracking-[0.1em] text-black">
-                    View Event
-                  </span>
-                </div>
+                Reset
               </Link>
             )}
+          </div>
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {otherEvents.map((event) => (
-                <Link
-                  key={event.id}
-                  href={`/events/${event.id}`}
-                  className="group overflow-hidden border border-white/10 bg-white/[0.03] transition hover:-translate-y-1 hover:border-white/35"
-                >
-                  <div className="relative h-64 w-full bg-white/5">
-                    {event.image_url ? (
-                      <Image
-                        src={event.image_url}
-                        alt={event.title}
-                        fill
-                        className="object-cover transition duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-white/30">
-                        No image
-                      </div>
-                    )}
-
-                    <div className="absolute left-3 top-3 border border-white/20 bg-black/70 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-white">
-                      {event.category || "Event"}
-                    </div>
-                  </div>
-
-                  <div className="p-5">
-                    <h2 className="line-clamp-2 text-2xl font-black leading-tight tracking-[-0.03em]">
-                      {event.title}
-                    </h2>
-
-                    <p className="mt-4 line-clamp-1 text-sm text-white/60">
-                      {event.location || "Location coming soon"}
-                    </p>
-
-                    <p className="mt-2 text-sm text-white/40">
-                      {formatEventDate(event.event_date)}
-                    </p>
-
-                    <div className="mt-5 border-t border-white/10 pt-4 text-[11px] font-black uppercase tracking-[0.12em] text-white/55">
-                      View details →
-                    </div>
-                  </div>
-                </Link>
+          {loading ? (
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {[1, 2, 3].map((item) => (
+                <div
+                  key={item}
+                  className="h-[310px] w-[230px] shrink-0 animate-pulse rounded-[24px] bg-white/[0.06]"
+                />
               ))}
             </div>
-          </>
+          ) : popularEvents.length === 0 ? (
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-6">
+              <p className="text-xl font-black">No events found</p>
+
+              <p className="mt-2 text-sm text-white/55">
+                Try searching another event or category.
+              </p>
+            </div>
+          ) : (
+            <div className="flex gap-5 overflow-x-auto pb-5 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
+              {popularEvents.map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {moreEvents.length > 0 && (
+          <section className="mb-10">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-[28px] font-black tracking-[-0.04em]">
+                More Events
+              </h2>
+            </div>
+
+            <div className="flex gap-5 overflow-x-auto pb-5 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
+              {moreEvents.map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+          </section>
         )}
+
+        <section>
+          <h2 className="mb-4 text-[22px] font-black tracking-[-0.04em]">
+            Quick Search
+          </h2>
+
+          <div className="flex flex-wrap gap-2">
+            {quickSearches.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => handleSearch(item)}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[12px] font-bold uppercase tracking-[0.08em] text-white/65 transition hover:border-white/30 hover:text-white"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </main>
   );
