@@ -252,9 +252,10 @@ export default function EventPage() {
         .order("price", { ascending: true });
 
       const { data: resaleRows } = await supabase
-        .from("resales")
-        .select("*")
-        .eq("status", "listed");
+  .from("resales")
+  .select("*")
+  .eq("status", "active")
+  .eq("event_id", eventId);
 
       const resaleEnriched = await Promise.all(
         (resaleRows || []).map(async (resale: any) => {
