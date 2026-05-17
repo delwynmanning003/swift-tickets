@@ -6,22 +6,36 @@ import { useParams } from "next/navigation";
 
 export default function ResaleTicketPage() {
   const params = useParams();
+  const resaleId = String(params.id || "");
 
   const [loading, setLoading] = useState(true);
   const [resale, setResale] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    loadResale();
-  }, []);
+    if (resaleId) loadResale();
+  }, [resaleId]);
 
   const loadResale = async () => {
-    const { data: resaleRow } = await supabase
+    setLoading(true);
+    setErrorMessage("");
+
+    const { data: resaleRow, error: resaleError } = await supabase
       .from("resales")
       .select("*")
-      .eq("id", params.id)
-      .single();
+      .eq("id", resaleId)
+      .in("status", ["active", "listed"])
+      .maybeSingle();
+
+    if (resaleError) {
+      console.error("Resale load error:", resaleError);
+      setErrorMessage(resaleError.message);
+      setLoading(false);
+      return;
+    }
 
     if (!resaleRow) {
+      setErrorMessage(`No active resale found for ID: ${resaleId}`);
       setLoading(false);
       return;
     }
@@ -30,13 +44,13 @@ export default function ResaleTicketPage() {
       .from("events")
       .select("*")
       .eq("id", resaleRow.event_id)
-      .single();
+      .maybeSingle();
 
     const { data: ticketType } = await supabase
       .from("ticket_types")
       .select("*")
       .eq("id", resaleRow.ticket_type_id)
-      .single();
+      .maybeSingle();
 
     setResale({
       ...resaleRow,
@@ -49,7 +63,7 @@ export default function ResaleTicketPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black flex items-center justify-center text-white">
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
         Loading resale ticket...
       </main>
     );
@@ -57,8 +71,13 @@ export default function ResaleTicketPage() {
 
   if (!resale) {
     return (
-      <main className="min-h-screen bg-black flex items-center justify-center text-white">
-        Resale ticket not found.
+      <main className="flex min-h-screen items-center justify-center bg-black px-6 text-center text-white">
+        <div>
+          <p>Resale ticket not found.</p>
+          {errorMessage && (
+            <p className="mt-4 max-w-xl text-xs text-red-300">{errorMessage}</p>
+          )}
+        </div>
       </main>
     );
   }
@@ -71,7 +90,7 @@ export default function ResaleTicketPage() {
         </p>
 
         <h1 className="text-4xl font-extrabold">
-          {resale.eventRow?.title}
+          {resale.eventRow?.title || "Resale Ticket"}
         </h1>
 
         <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-[#0b0b0b]">
@@ -84,7 +103,7 @@ export default function ResaleTicketPage() {
           )}
 
           <div className="p-6">
-            <div className="rounded-full bg-orange-500/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-orange-300 w-fit">
+            <div className="w-fit rounded-full bg-orange-500/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-orange-300">
               Verified Resale Ticket
             </div>
 
@@ -92,14 +111,14 @@ export default function ResaleTicketPage() {
               <p>
                 Ticket Type:{" "}
                 <span className="font-bold text-white">
-                  {resale.ticketType?.name}
+                  {resale.ticketType?.name || "Ticket"}
                 </span>
               </p>
 
               <p>
                 Location:{" "}
                 <span className="font-bold text-white">
-                  {resale.eventRow?.location}
+                  {resale.eventRow?.location || "Location TBA"}
                 </span>
               </p>
 
@@ -107,52 +126,45 @@ export default function ResaleTicketPage() {
                 Event Date:{" "}
                 <span className="font-bold text-white">
                   {resale.eventRow?.event_date
-                    ? new Date(
-                        resale.eventRow.event_date
-                      ).toLocaleString()
+                    ? new Date(resale.eventRow.event_date).toLocaleString()
                     : "TBA"}
                 </span>
               </p>
             </div>
 
             <div className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-5">
-              <h2 className="text-lg font-bold">
-                Pricing Transparency
-              </h2>
+              <h2 className="text-lg font-bold">Pricing Transparency</h2>
 
               <div className="mt-4 space-y-2 text-sm text-white/70">
-                <div className="flex items-center justify-between">
+                <div className="flex justify-between">
                   <span>Original Ticket Price</span>
                   <span className="font-bold text-white">
-                    R{Number(resale.resale_price).toFixed(2)}
+                    R{Number(resale.resale_price || 0).toFixed(2)}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex justify-between">
                   <span>Swift Protection Fee</span>
                   <span className="font-bold text-white">
-                    {resale.resale_fee_percent}%
+                    {Number(resale.resale_fee_percent || 0)}%
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-white/10 pt-4 text-base">
-                  <span className="font-bold text-white">
-                    Total
-                  </span>
-
+                <div className="flex justify-between border-t border-white/10 pt-4 text-base">
+                  <span className="font-bold text-white">Total</span>
                   <span className="font-extrabold text-white">
-                    R{Number(resale.buyer_total).toFixed(2)}
+                    R{Number(resale.buyer_total || 0).toFixed(2)}
                   </span>
                 </div>
               </div>
             </div>
 
             <a
-  href={`/resale-checkout/${resale.id}`}
-  className="mt-8 block w-full bg-white px-6 py-4 text-center text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90"
->
-  Buy Resale Ticket
-</a>
+              href={`/resale-checkout/${resale.id}`}
+              className="mt-8 block w-full bg-white px-6 py-4 text-center text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90"
+            >
+              Buy Resale Ticket
+            </a>
 
             <p className="mt-4 text-center text-xs text-white/40">
               QR ownership will automatically transfer after purchase.
