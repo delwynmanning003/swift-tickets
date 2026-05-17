@@ -315,17 +315,6 @@ export default function CheckoutPage() {
         return;
       }
 
-      if (data.reference) {
-        const { error: updateError } = await supabase
-          .from("orders")
-          .update({ reference: data.reference })
-          .eq("id", order.id);
-
-        if (updateError) {
-          console.error("Failed to save payment reference:", updateError);
-        }
-      }
-
       window.location.href = data.url;
     } catch (error) {
       console.error("Checkout error:", error);
