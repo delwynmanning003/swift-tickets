@@ -6,7 +6,13 @@ import { useParams } from "next/navigation";
 
 export default function ResaleTicketPage() {
   const params = useParams();
-  const resaleId = String(params?.id || "");
+
+  const resaleId =
+    typeof params?.id === "string"
+      ? params.id
+      : typeof window !== "undefined"
+      ? window.location.pathname.split("/").filter(Boolean).pop() || ""
+      : "";
 
   const [loading, setLoading] = useState(true);
   const [resale, setResale] = useState<any>(null);
@@ -105,7 +111,7 @@ export default function ResaleTicketPage() {
           {resale.eventRow?.image_url && (
             <img
               src={resale.eventRow.image_url}
-              alt={resale.eventRow.title}
+              alt={resale.eventRow.title || "Event image"}
               className="h-[300px] w-full object-cover"
             />
           )}
