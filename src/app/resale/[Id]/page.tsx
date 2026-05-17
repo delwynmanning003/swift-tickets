@@ -6,60 +6,68 @@ import { useParams } from "next/navigation";
 
 export default function ResaleTicketPage() {
   const params = useParams();
-  const resaleId = String(params.id || "");
+  const resaleId = String(params?.id || "");
 
   const [loading, setLoading] = useState(true);
   const [resale, setResale] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    if (resaleId) loadResale();
+    const loadResale = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+
+        if (!resaleId) {
+          setErrorMessage("Missing resale ID.");
+          return;
+        }
+
+        const { data: resaleRow, error: resaleError } = await supabase
+          .from("resales")
+          .select("*")
+          .eq("id", resaleId)
+          .in("status", ["active", "listed"])
+          .maybeSingle();
+
+        if (resaleError) {
+          setErrorMessage(resaleError.message);
+          return;
+        }
+
+        if (!resaleRow) {
+          setErrorMessage(`No active resale found for ID: ${resaleId}`);
+          return;
+        }
+
+        const { data: eventRow } = await supabase
+          .from("events")
+          .select("*")
+          .eq("id", resaleRow.event_id)
+          .maybeSingle();
+
+        const { data: ticketType } = await supabase
+          .from("ticket_types")
+          .select("*")
+          .eq("id", resaleRow.ticket_type_id)
+          .maybeSingle();
+
+        setResale({
+          ...resaleRow,
+          eventRow,
+          ticketType,
+        });
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Failed to load resale ticket."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadResale();
   }, [resaleId]);
-
-  const loadResale = async () => {
-    setLoading(true);
-    setErrorMessage("");
-
-    const { data: resaleRow, error: resaleError } = await supabase
-      .from("resales")
-      .select("*")
-      .eq("id", resaleId)
-      .in("status", ["active", "listed"])
-      .maybeSingle();
-
-    if (resaleError) {
-      console.error("Resale load error:", resaleError);
-      setErrorMessage(resaleError.message);
-      setLoading(false);
-      return;
-    }
-
-    if (!resaleRow) {
-      setErrorMessage(`No active resale found for ID: ${resaleId}`);
-      setLoading(false);
-      return;
-    }
-
-    const { data: eventRow } = await supabase
-      .from("events")
-      .select("*")
-      .eq("id", resaleRow.event_id)
-      .maybeSingle();
-
-    const { data: ticketType } = await supabase
-      .from("ticket_types")
-      .select("*")
-      .eq("id", resaleRow.ticket_type_id)
-      .maybeSingle();
-
-    setResale({
-      ...resaleRow,
-      eventRow,
-      ticketType,
-    });
-
-    setLoading(false);
-  };
 
   if (loading) {
     return (
