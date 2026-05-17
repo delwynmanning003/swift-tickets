@@ -174,7 +174,79 @@ async function finalizeOrder(reference: string, skipPaystack = false) {
       return { error: "Payment not successful", status: 400 };
     }
   }
+// RESALE PURCHASE FLOW
+if (order.resale_id) {
+  const { data: resaleRow, error: resaleError } = await supabase
+    .from("resales")
+    .select("*")
+    .eq("id", order.resale_id)
+    .single();
 
+  if (resaleError || !resaleRow) {
+    return { error: "Resale listing not found", status: 404 };
+  }
+
+  if (resaleRow.status !== "active") {
+    return { error: "Resale ticket already sold", status: 400 };
+  }
+
+  // Transfer ownership
+  const { error: transferError } = await supabase
+    .from("tickets")
+    .update({
+      user_id: order.user_id,
+      buyer_email: order.buyer_email,
+      qr_code: crypto.randomUUID(), // invalidate old QR
+      checked_in: false,
+    })
+    .eq("id", resaleRow.ticket_id);
+
+  if (transferError) {
+    return { error: transferError.message, status: 500 };
+  }
+
+  // Mark resale sold
+  const { error: resaleUpdateError } = await supabase
+    .from("resales")
+    .update({
+      status: "sold",
+      buyer_user_id: order.user_id,
+      sold_at: new Date().toISOString(),
+    })
+    .eq("id", resaleRow.id);
+
+  if (resaleUpdateError) {
+    return { error: resaleUpdateError.message, status: 500 };
+  }
+
+  // Mark order paid
+  const { error: updateOrderError } = await supabase
+    .from("orders")
+    .update({ status: "paid" })
+    .eq("id", order.id);
+
+  if (updateOrderError) {
+    return { error: updateOrderError.message, status: 500 };
+  }
+
+  if (order.buyer_email) {
+    await sendTicketEmail({
+      buyerEmail: order.buyer_email,
+      buyerName: order.buyer_name,
+      eventTitle: eventRow.title,
+      eventLocation: eventRow.location,
+      eventDate: eventRow.event_date,
+      ticketTypeName: ticketType.name,
+      quantity: 1,
+      reference,
+    });
+  }
+
+  return {
+    success: true,
+    message: "Resale ticket transferred successfully",
+  };
+}
   const orderQuantity = Number(order.quantity);
 
   const tickets = Array.from({ length: orderQuantity }).map(() => ({
