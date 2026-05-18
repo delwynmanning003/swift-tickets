@@ -222,7 +222,10 @@ if (order.resale_id) {
   // Mark order paid
   const { error: updateOrderError } = await supabase
     .from("orders")
-    .update({ status: "paid" })
+    .update({
+  status: "paid",
+  payment_status: "paid",
+})
     .eq("id", order.id);
 
   if (updateOrderError) {
