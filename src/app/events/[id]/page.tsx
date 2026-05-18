@@ -256,6 +256,7 @@ export default function EventPage() {
   .select("*")
   .eq("status", "active")
   .eq("event_id", eventId);
+  .gt("expires_at", new Date().toISOString())
 
       const resaleEnriched = await Promise.all(
         (resaleRows || []).map(async (resale: any) => {

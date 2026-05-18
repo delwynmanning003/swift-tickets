@@ -145,6 +145,7 @@ export default function MyTicketsPage() {
         resale_fee_percent: RESALE_FEE_PERCENT,
         seller_amount: originalPrice,
         buyer_total: buyerTotal,
+        expires_at: selectedTicket.eventRow?.event_date || null,
 
         status: "active",
       };
