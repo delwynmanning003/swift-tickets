@@ -34,19 +34,23 @@ export async function POST(req: Request) {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email,
-          amount: Math.round(Number(amount) * 100),
-          reference,
-          callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?reference=${encodeURIComponent(
-            reference
-          )}`,
-          metadata: {
-            orderId,
-            fullName,
-            reference,
-          },
-        }),
+        const reference = `swift_${Date.now()}_${Math.random()
+  .toString(36)
+  .substring(2, 10)}`;
+
+body: JSON.stringify({
+  email,
+  amount: Math.round(Number(amount) * 100),
+
+  reference,
+
+  callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?reference=${reference}&orderId=${orderId}`,
+
+  metadata: {
+    orderId,
+    fullName,
+  },
+}),
       }
     );
 
@@ -60,9 +64,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      url: paystackData.data.authorization_url,
-      reference,
-    });
+  url: paystackData.data.authorization_url,
+  reference,
+});
   } catch (error) {
     return NextResponse.json(
       {

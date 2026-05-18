@@ -7,21 +7,22 @@ import { useSearchParams } from "next/navigation";
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const reference = searchParams.get("reference");
+  const orderId = searchParams.get("orderId");
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("Finalizing your order...");
 
   useEffect(() => {
     const finalize = async () => {
-      if (!reference) {
+      if (!reference || !orderId) {
         setStatus("error");
-        setMessage("Missing payment reference.");
+        setMessage("Missing payment reference or order ID.");
         return;
       }
 
       try {
         const res = await fetch(
-          `/api/paystack/verify?reference=${encodeURIComponent(reference)}`
+          `/api/paystack/verify?reference=${encodeURIComponent(reference)}&orderId=${encodeURIComponent(orderId)}`
         );
 
         const data = await res.json();
@@ -42,7 +43,7 @@ function PaymentSuccessContent() {
     };
 
     finalize();
-  }, [reference]);
+  }, [reference, orderId]);
 
   return (
     <main className="min-h-screen bg-black px-6 text-white">
@@ -50,22 +51,18 @@ function PaymentSuccessContent() {
         <div className="w-full border border-white/10 bg-white/[0.03] p-8 text-center md:p-10">
           {status === "loading" && (
             <>
-              <h1 className="mb-4 text-3xl font-extrabold">
-                Processing Payment...
-              </h1>
+              <h1 className="mb-4 text-3xl font-extrabold">Processing Payment...</h1>
               <p className="text-white/70">{message}</p>
             </>
           )}
 
           {status === "success" && (
             <>
-              <h1 className="mb-4 text-3xl font-extrabold">
-                Payment Successful 🎉
-              </h1>
+              <h1 className="mb-4 text-3xl font-extrabold">Payment Successful 🎉</h1>
               <p className="text-white/70">{message}</p>
 
-              <div className="mt-8 flex gap-3 justify-center">
-                <Link href="/my-tickets" className="bg-white px-6 py-3 text-black font-bold">
+              <div className="mt-8 flex justify-center gap-3">
+                <Link href="/my-tickets" className="bg-white px-6 py-3 font-bold text-black">
                   My Tickets
                 </Link>
                 <Link href="/" className="border border-white px-6 py-3">
@@ -77,9 +74,7 @@ function PaymentSuccessContent() {
 
           {status === "error" && (
             <>
-              <h1 className="mb-4 text-3xl font-extrabold text-red-400">
-                Error
-              </h1>
+              <h1 className="mb-4 text-3xl font-extrabold text-red-400">Error</h1>
               <p className="text-white/70">{message}</p>
             </>
           )}
