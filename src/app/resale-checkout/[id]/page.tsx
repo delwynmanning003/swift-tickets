@@ -6,7 +6,14 @@ import { supabase } from "@/lib/supabase";
 
 export default function ResaleCheckoutPage() {
   const params = useParams();
-  const resaleId = params.id as string;
+
+  const resaleId =
+    typeof params?.id === "string"
+      ? params.id
+      : typeof window !== "undefined"
+      ? window.location.pathname.split("/").filter(Boolean).pop() || ""
+      : "";
+
   const redirectToCheckout = `/resale-checkout/${resaleId}`;
 
   const [resale, setResale] = useState<any>(null);
@@ -17,6 +24,7 @@ export default function ResaleCheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [paying, setPaying] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const getUser = async () => {
@@ -37,50 +45,68 @@ export default function ResaleCheckoutPage() {
 
   useEffect(() => {
     const loadResale = async () => {
-      setLoading(true);
+      try {
+        setLoading(true);
+        setErrorMessage("");
 
-      const { data: resaleRow } = await supabase
-        .from("resales")
-        .select("*")
-        .eq("id", resaleId)
-        .eq("status", "active")
-        .single();
+        if (!resaleId) {
+          setErrorMessage("Missing resale ticket ID.");
+          return;
+        }
 
-      if (!resaleRow) {
-        setResale(null);
+        const { data: resaleRow, error: resaleError } = await supabase
+          .from("resales")
+          .select("*")
+          .eq("id", resaleId)
+          .in("status", ["active", "listed"])
+          .maybeSingle();
+
+        if (resaleError) {
+          setErrorMessage(resaleError.message);
+          return;
+        }
+
+        if (!resaleRow) {
+          setErrorMessage("This resale ticket is no longer available.");
+          return;
+        }
+
+        const { data: eventRow } = await supabase
+          .from("events")
+          .select("*")
+          .eq("id", resaleRow.event_id)
+          .maybeSingle();
+
+        const { data: ticketType } = await supabase
+          .from("ticket_types")
+          .select("*")
+          .eq("id", resaleRow.ticket_type_id)
+          .maybeSingle();
+
+        const { data: ticket } = await supabase
+          .from("tickets")
+          .select("*")
+          .eq("id", resaleRow.ticket_id)
+          .maybeSingle();
+
+        setResale({
+          ...resaleRow,
+          eventRow,
+          ticketType,
+          ticket,
+        });
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Failed to load resale checkout."
+        );
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const { data: eventRow } = await supabase
-        .from("events")
-        .select("*")
-        .eq("id", resaleRow.event_id)
-        .single();
-
-      const { data: ticketType } = await supabase
-        .from("ticket_types")
-        .select("*")
-        .eq("id", resaleRow.ticket_type_id)
-        .single();
-
-      const { data: ticket } = await supabase
-        .from("tickets")
-        .select("*")
-        .eq("id", resaleRow.ticket_id)
-        .single();
-
-      setResale({
-        ...resaleRow,
-        eventRow,
-        ticketType,
-        ticket,
-      });
-
-      setLoading(false);
     };
 
-    if (resaleId) loadResale();
+    loadResale();
   }, [resaleId]);
 
   const handlePay = async () => {
@@ -96,8 +122,26 @@ export default function ResaleCheckoutPage() {
       return;
     }
 
-    if (resale.seller_user_id === user.id) {
+    if (resale.seller_user_id === user.id || resale.seller_id === user.id) {
       alert("You cannot buy your own resale ticket.");
+      return;
+    }
+
+    if (resale.status !== "active" && resale.status !== "listed") {
+      alert("This resale ticket is no longer available.");
+      return;
+    }
+
+    if (resale.ticket?.checked_in) {
+      alert("This ticket has already been used.");
+      return;
+    }
+
+    if (
+      resale.eventRow?.event_date &&
+      new Date(resale.eventRow.event_date) <= new Date()
+    ) {
+      alert("This event has already started.");
       return;
     }
 
@@ -129,6 +173,7 @@ export default function ResaleCheckoutPage() {
             buyer_email: buyerEmail.trim(),
             quantity: 1,
             status: "pending",
+            payment_status: "pending",
             base_amount: Number(resale.resale_price || 0),
             fixed_fee: 0,
             percentage_fee:
@@ -158,6 +203,7 @@ export default function ResaleCheckoutPage() {
           fullName: buyerName.trim(),
           amount: Number(resale.buyer_total || 0),
           orderId: order.id,
+          reference,
         }),
       });
 
@@ -168,11 +214,9 @@ export default function ResaleCheckoutPage() {
         return;
       }
 
-      if (data.reference) {
-        await supabase
-          .from("orders")
-          .update({ reference: data.reference })
-          .eq("id", order.id);
+      if (!data.url) {
+        alert("No payment URL returned.");
+        return;
       }
 
       window.location.href = data.url;
@@ -197,11 +241,27 @@ export default function ResaleCheckoutPage() {
 
   if (!resale) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-black text-white">
-        Resale ticket not found or already sold.
+      <main className="flex min-h-screen items-center justify-center bg-black px-6 text-center text-white">
+        <div>
+          <p>Resale ticket not found or already sold.</p>
+          {errorMessage && (
+            <p className="mt-4 max-w-xl text-xs text-red-300">
+              {errorMessage}
+            </p>
+          )}
+        </div>
       </main>
     );
   }
+
+  const eventHasStarted =
+    resale.eventRow?.event_date &&
+    new Date(resale.eventRow.event_date) <= new Date();
+
+  const unavailable =
+    resale.status !== "active" ||
+    resale.ticket?.checked_in ||
+    eventHasStarted;
 
   return (
     <main className="min-h-screen bg-black px-6 py-12 text-white">
@@ -237,18 +297,28 @@ export default function ResaleCheckoutPage() {
                 className="h-12 w-full border border-white/15 bg-transparent px-4 outline-none focus:border-white/60"
               />
             </div>
+
+            {unavailable && (
+              <div className="mt-5 border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+                This resale ticket is no longer available.
+              </div>
+            )}
           </div>
 
           <div className="border border-white/10 bg-white/[0.03] p-6">
             <h2 className="mb-5 text-2xl font-bold">Order Summary</h2>
 
             <div className="space-y-3 text-sm">
-              <p className="font-bold">{resale.eventRow?.title}</p>
-              <p className="text-white/60">{resale.ticketType?.name}</p>
+              <p className="font-bold">
+                {resale.eventRow?.title || "Resale Ticket"}
+              </p>
+              <p className="text-white/60">
+                {resale.ticketType?.name || "Ticket"}
+              </p>
 
               <div className="flex justify-between border-t border-white/10 pt-4">
                 <span>Original ticket price</span>
-                <span>R{Number(resale.resale_price).toFixed(2)}</span>
+                <span>R{Number(resale.resale_price || 0).toFixed(2)}</span>
               </div>
 
               <div className="flex justify-between">
@@ -258,18 +328,20 @@ export default function ResaleCheckoutPage() {
 
               <div className="flex justify-between border-t border-white/10 pt-4 text-base font-bold">
                 <span>Total Due</span>
-                <span>R{Number(resale.buyer_total).toFixed(2)}</span>
+                <span>R{Number(resale.buyer_total || 0).toFixed(2)}</span>
               </div>
             </div>
 
             <button
               onClick={handlePay}
-              disabled={paying}
-              className="mt-6 w-full bg-white px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90 disabled:opacity-60"
+              disabled={paying || unavailable}
+              className="mt-6 w-full bg-white px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {paying
                 ? "Redirecting..."
-                : `Pay R${Number(resale.buyer_total).toFixed(2)}`}
+                : unavailable
+                ? "Unavailable"
+                : `Pay R${Number(resale.buyer_total || 0).toFixed(2)}`}
             </button>
           </div>
         </div>
