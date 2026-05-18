@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { email, amount, orderId, fullName } = body;
+    const { email, amount, orderId, fullName, reference } = body;
 
-    if (!email || !amount || !orderId) {
+    if (!email || !amount || !orderId || !reference) {
       return NextResponse.json(
         { error: "Missing required payment fields" },
         { status: 400 }
@@ -37,10 +37,14 @@ export async function POST(req: Request) {
         body: JSON.stringify({
           email,
           amount: Math.round(Number(amount) * 100),
-          callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success`,
+          reference,
+          callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?reference=${encodeURIComponent(
+            reference
+          )}`,
           metadata: {
             orderId,
             fullName,
+            reference,
           },
         }),
       }
@@ -57,7 +61,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       url: paystackData.data.authorization_url,
-      reference: paystackData.data.reference,
+      reference,
     });
   } catch (error) {
     return NextResponse.json(

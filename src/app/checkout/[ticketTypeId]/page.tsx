@@ -298,6 +298,7 @@ export default function CheckoutPage() {
           fullName: buyerName.trim(),
           amount: amounts.buyerTotal,
           orderId: order.id,
+          reference,
         }),
       });
 
