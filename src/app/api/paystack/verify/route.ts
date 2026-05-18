@@ -9,12 +9,7 @@ const supabase = createClient(
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
-
-  if (!apiKey) {
-    console.error("RESEND_API_KEY missing");
-    return null;
-  }
-
+  if (!apiKey) return null;
   return new Resend(apiKey);
 }
 
@@ -29,11 +24,7 @@ async function sendTicketEmail(params: {
   reference: string;
 }) {
   const resend = getResendClient();
-
-  if (!resend) {
-    console.error("Skipping email because RESEND_API_KEY is missing");
-    return;
-  }
+  if (!resend) return;
 
   const {
     buyerEmail,
@@ -57,10 +48,13 @@ async function sendTicketEmail(params: {
       })
     : "Date TBA";
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://swifttickets.co.za";
 
   try {
-    const { error } = await resend.emails.send({
+    await resend.emails.send({
       from: "Swift Tickets <onboarding@resend.dev>",
       to: buyerEmail,
       subject: `Your tickets for ${eventTitle || "your event"}`,
@@ -82,35 +76,62 @@ async function sendTicketEmail(params: {
             </p>
 
             <div style="padding:16px;background:#f9fafb;border:1px solid #e5e7eb;margin-bottom:20px;">
-              <p style="margin:0 0 8px;"><strong>Event:</strong> ${eventTitle || "-"}</p>
-              <p style="margin:0 0 8px;"><strong>Ticket Type:</strong> ${ticketTypeName || "-"}</p>
+              <p style="margin:0 0 8px;"><strong>Event:</strong> ${
+                eventTitle || "-"
+              }</p>
+              <p style="margin:0 0 8px;"><strong>Ticket Type:</strong> ${
+                ticketTypeName || "-"
+              }</p>
               <p style="margin:0 0 8px;"><strong>Quantity:</strong> ${quantity}</p>
-              <p style="margin:0 0 8px;"><strong>Location:</strong> ${eventLocation || "-"}</p>
+              <p style="margin:0 0 8px;"><strong>Location:</strong> ${
+                eventLocation || "-"
+              }</p>
               <p style="margin:0 0 8px;"><strong>Date:</strong> ${formattedDate}</p>
               <p style="margin:0;"><strong>Reference:</strong> ${reference}</p>
             </div>
 
-            <a
-              href="${appUrl}/my-tickets"
-              style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:14px 20px;font-weight:700;"
-            >
+            <a href="${appUrl}/my-tickets" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:14px 20px;font-weight:700;">
               View My Tickets
             </a>
-
-            <p style="margin:24px 0 0;color:#6b7280;font-size:13px;line-height:1.6;">
-              You can access your QR code and ticket details anytime in My Tickets.
-            </p>
           </div>
         </div>
       `,
     });
-
-    if (error) {
-      console.error("Resend email error:", error);
-    }
   } catch (error) {
     console.error("Unexpected email send error:", error);
   }
+}
+
+async function verifyPaystack(reference: string) {
+  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+
+  if (!paystackSecret) {
+    return { ok: false, error: "Missing PAYSTACK_SECRET_KEY", status: 500 };
+  }
+
+  const paystackRes = await fetch(
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(
+      reference
+    )}`,
+    {
+      headers: {
+        Authorization: `Bearer ${paystackSecret}`,
+      },
+    }
+  );
+
+  const paystackData = await paystackRes.json();
+
+  if (
+    !paystackRes.ok ||
+    !paystackData.status ||
+    paystackData.data?.status !== "success"
+  ) {
+    console.error("Paystack verify failed:", paystackData);
+    return { ok: false, error: "Payment not successful", status: 400 };
+  }
+
+  return { ok: true };
 }
 
 async function finalizeOrder(reference: string, skipPaystack = false) {
@@ -118,21 +139,33 @@ async function finalizeOrder(reference: string, skipPaystack = false) {
     .from("orders")
     .select("*")
     .eq("reference", reference)
-    .single();
+    .maybeSingle();
 
   if (orderError || !order) {
+    console.error("Order lookup failed:", orderError);
     return { error: "Order not found", status: 404 };
   }
 
-  if (order.status === "paid") {
+  if (order.status === "paid" && order.payment_status === "paid") {
     return { success: true, message: "Already processed" };
+  }
+
+  if (!skipPaystack) {
+    const paystackCheck = await verifyPaystack(reference);
+
+    if (!paystackCheck.ok) {
+      return {
+        error: paystackCheck.error,
+        status: paystackCheck.status,
+      };
+    }
   }
 
   const { data: ticketType, error: ticketError } = await supabase
     .from("ticket_types")
     .select("*")
     .eq("id", order.ticket_type_id)
-    .single();
+    .maybeSingle();
 
   if (ticketError || !ticketType) {
     return { error: "Ticket type not found", status: 404 };
@@ -142,148 +175,135 @@ async function finalizeOrder(reference: string, skipPaystack = false) {
     .from("events")
     .select("*")
     .eq("id", ticketType.event_id)
-    .single();
+    .maybeSingle();
 
   if (eventError || !eventRow) {
     return { error: "Event not found", status: 404 };
   }
 
-  if (Number(ticketType.quantity) < Number(order.quantity)) {
+  if (order.resale_id) {
+    const { data: resaleRow, error: resaleError } = await supabase
+      .from("resales")
+      .select("*")
+      .eq("id", order.resale_id)
+      .maybeSingle();
+
+    if (resaleError || !resaleRow) {
+      return { error: "Resale listing not found", status: 404 };
+    }
+
+    if (resaleRow.status !== "active" && resaleRow.status !== "listed") {
+      return { error: "Resale ticket already sold", status: 400 };
+    }
+
+    const { error: transferError } = await supabase
+      .from("tickets")
+      .update({
+        user_id: order.user_id,
+        buyer_email: order.buyer_email,
+        qr_code: crypto.randomUUID(),
+        checked_in: false,
+        status: "valid",
+      })
+      .eq("id", resaleRow.ticket_id);
+
+    if (transferError) {
+      return { error: transferError.message, status: 500 };
+    }
+
+    const { error: resaleUpdateError } = await supabase
+      .from("resales")
+      .update({
+        status: "sold",
+        buyer_user_id: order.user_id,
+        buyer_id: order.user_id,
+        sold_at: new Date().toISOString(),
+      })
+      .eq("id", resaleRow.id);
+
+    if (resaleUpdateError) {
+      return { error: resaleUpdateError.message, status: 500 };
+    }
+
+    const { error: updateOrderError } = await supabase
+      .from("orders")
+      .update({
+        status: "paid",
+        payment_status: "paid",
+      })
+      .eq("id", order.id);
+
+    if (updateOrderError) {
+      return { error: updateOrderError.message, status: 500 };
+    }
+
+    if (order.buyer_email) {
+      await sendTicketEmail({
+        buyerEmail: order.buyer_email,
+        buyerName: order.buyer_name,
+        eventTitle: eventRow.title,
+        eventLocation: eventRow.location,
+        eventDate: eventRow.event_date,
+        ticketTypeName: ticketType.name,
+        quantity: 1,
+        reference,
+      });
+    }
+
+    return {
+      success: true,
+      message: "Resale ticket transferred successfully",
+    };
+  }
+
+  const orderQuantity = Number(order.quantity);
+
+  if (Number(ticketType.quantity) < orderQuantity) {
     return { error: "Not enough tickets available", status: 400 };
   }
 
-  if (!skipPaystack) {
-    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
-
-    if (!paystackSecret) {
-      return { error: "Missing PAYSTACK_SECRET_KEY", status: 500 };
-    }
-
-    const paystackRes = await fetch(
-      `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        headers: {
-          Authorization: `Bearer ${paystackSecret}`,
-        },
-      }
-    );
-
-    const paystackData = await paystackRes.json();
-
-    if (!paystackRes.ok || !paystackData.status || paystackData.data?.status !== "success") {
-      return { error: "Payment not successful", status: 400 };
-    }
-  }
-// RESALE PURCHASE FLOW
-if (order.resale_id) {
-  const { data: resaleRow, error: resaleError } = await supabase
-    .from("resales")
-    .select("*")
-    .eq("id", order.resale_id)
-    .single();
-
-  if (resaleError || !resaleRow) {
-    return { error: "Resale listing not found", status: 404 };
-  }
-
-  if (resaleRow.status !== "active") {
-    return { error: "Resale ticket already sold", status: 400 };
-  }
-
-  // Transfer ownership
-  const { error: transferError } = await supabase
+  const existingTickets = await supabase
     .from("tickets")
-    .update({
-      user_id: order.user_id,
-      buyer_email: order.buyer_email,
-      qr_code: crypto.randomUUID(), // invalidate old QR
+    .select("id")
+    .eq("order_id", order.id);
+
+  if ((existingTickets.data || []).length === 0) {
+    const tickets = Array.from({ length: orderQuantity }).map(() => ({
+      order_id: order.id,
+      ticket_type_id: order.ticket_type_id,
+      user_id: order.user_id ?? null,
+      buyer_email: order.buyer_email ?? null,
+      status: "valid",
+      qr_code: crypto.randomUUID(),
       checked_in: false,
-    })
-    .eq("id", resaleRow.ticket_id);
+    }));
 
-  if (transferError) {
-    return { error: transferError.message, status: 500 };
-  }
+    const { error: ticketInsertError } = await supabase
+      .from("tickets")
+      .insert(tickets);
 
-  // Mark resale sold
-  const { error: resaleUpdateError } = await supabase
-    .from("resales")
-    .update({
-      status: "sold",
-      buyer_user_id: order.user_id,
-      sold_at: new Date().toISOString(),
-    })
-    .eq("id", resaleRow.id);
+    if (ticketInsertError) {
+      return { error: ticketInsertError.message, status: 500 };
+    }
 
-  if (resaleUpdateError) {
-    return { error: resaleUpdateError.message, status: 500 };
-  }
+    const newQuantity = Number(ticketType.quantity) - orderQuantity;
 
-  // Mark order paid
-  const { error: updateOrderError } = await supabase
-    .from("orders")
-    .update({
-  status: "paid",
-  payment_status: "paid",
-})
-    .eq("id", order.id);
+    const { error: updateQtyError } = await supabase
+      .from("ticket_types")
+      .update({ quantity: newQuantity })
+      .eq("id", order.ticket_type_id);
 
-  if (updateOrderError) {
-    return { error: updateOrderError.message, status: 500 };
-  }
-
-  if (order.buyer_email) {
-    await sendTicketEmail({
-      buyerEmail: order.buyer_email,
-      buyerName: order.buyer_name,
-      eventTitle: eventRow.title,
-      eventLocation: eventRow.location,
-      eventDate: eventRow.event_date,
-      ticketTypeName: ticketType.name,
-      quantity: 1,
-      reference,
-    });
-  }
-
-  return {
-    success: true,
-    message: "Resale ticket transferred successfully",
-  };
-}
-  const orderQuantity = Number(order.quantity);
-
-  const tickets = Array.from({ length: orderQuantity }).map(() => ({
-    order_id: order.id,
-    ticket_type_id: order.ticket_type_id,
-    user_id: order.user_id ?? null,
-    buyer_email: order.buyer_email ?? null,
-    status: "valid",
-    qr_code: crypto.randomUUID(),
-    checked_in: false,
-  }));
-
-  const { error: ticketInsertError } = await supabase
-    .from("tickets")
-    .insert(tickets);
-
-  if (ticketInsertError) {
-    return { error: ticketInsertError.message, status: 500 };
-  }
-
-  const newQuantity = Number(ticketType.quantity) - orderQuantity;
-
-  const { error: updateQtyError } = await supabase
-    .from("ticket_types")
-    .update({ quantity: newQuantity })
-    .eq("id", order.ticket_type_id);
-
-  if (updateQtyError) {
-    return { error: updateQtyError.message, status: 500 };
+    if (updateQtyError) {
+      return { error: updateQtyError.message, status: 500 };
+    }
   }
 
   const { error: updateOrderError } = await supabase
     .from("orders")
-    .update({ status: "paid" })
+    .update({
+      status: "paid",
+      payment_status: "paid",
+    })
     .eq("id", order.id);
 
   if (updateOrderError) {
